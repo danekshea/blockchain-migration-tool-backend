@@ -1,4 +1,4 @@
-import { ImmutableMethodResults, ImmutableXClient } from '@imtbl/imx-sdk';
+import { ImmutableXClient } from '@imtbl/imx-sdk';
 import { ethers, Wallet } from 'ethers';
 import * as dotenv from 'dotenv';
 dotenv.config();
