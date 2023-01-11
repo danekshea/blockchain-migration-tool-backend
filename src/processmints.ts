@@ -4,11 +4,10 @@ import { PrismaClient } from '@prisma/client'
 import { getClient } from './utils'
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
-import { exit } from "process";
 dotenv.config();
 
 
-async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: string, index: number = 0): Promise<EvmNftTransfer[]> {
+async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
 
   //console.log(process.env.MORALIS_API_KEY);
 
@@ -21,28 +20,31 @@ async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: s
   const response = await Moralis.EvmApi.nft.getNFTContractTransfers({
     address: process.env.ORIGIN_COLLECTION_ADDRESS!,
     chain: EvmChain.BSC,
+    from_block: 21739231,
+    to_block: 22739231,
     cursor: cursor
   });
 
-  console.log(response);
+  //console.log(response.result);
 
   //Optional timeout if you get rate limited
   //await new Promise(f => setTimeout(f, 500));
 
+  //Iterate through and sort out the burn transfers and push them into an array, make sure no duplicate tokenIDs are loaded
   const burnAddress = EvmAddress.create(process.env.BURN_ADDRESS!);
-  //Iterate through and sort out the burn transfers and push them into an array
-  response.result.forEach((element, index) => {
-    if (element.toAddress.lowercase == burnAddress.lowercase) {
+  for(const element of response.result) {
+    if (element.toAddress.lowercase == burnAddress.lowercase && !usedtokenids.includes(element.tokenId)) {
       burnTransfers.push(element);
+      usedtokenids.push(element.tokenId);
     }
-  });
+  }
 
   //Check if there's additional pages and cursor through them
   //If index is included, it's because you want to limit the requests while testing
   if (response.pagination && index < 100) {
     console.log(response.pagination.cursor)
     index++;
-    return await getBurnTransfers(burnTransfers, response.pagination.cursor, index);
+    return await getBurnTransfers(burnTransfers, response.pagination.cursor, index, usedtokenids);
   }
   return burnTransfers;
 }
@@ -67,7 +69,7 @@ async function loadBurnTransfers(burnTransfers: EvmNftTransfer[]) {
           toAddress: element.toAddress.lowercase
         },
       })
-      console.log(burn);
+      //console.log(burn);
     }
     catch (error) {
       console.log(error);
@@ -123,7 +125,25 @@ async function loadUserMintArray() {
   return mintArray;
 }
 
-async function mintUserBatches(mintArray: any[]) {
+async function cleanMintArray(mintArray: any[]) {
+  //Remove burn addresses, no need to mint to them
+  for (const element of mintArray) {
+    if (element.users[0].etherKey == process.env.BURN_ADDRESS) {
+      mintArray.splice(mintArray.indexOf(element), 1);
+    }
+  }
+
+  //Write everything to file
+  fs.writeFile('src/testing/cleanedMintArray.json', JSON.stringify(mintArray, null, '\t'), (err) => {
+    if (err) {
+      console.error(err);
+    } else {
+      console.log("Cleaned mint array written to data/batchifiedMintArray.json");
+    }
+  });
+}
+
+async function batchMintArray(mintArray: any[]) {
 
   //Mints per batch
   const batchsize = parseInt(process.env.MINTING_BATCH_SIZE!);
@@ -226,6 +246,8 @@ async function mintUserBatches(mintArray: any[]) {
       console.log("Batchified mint array written to data/batchifiedMintArray.json");
     }
   });
+
+  return mintArray;
 }
 
 
@@ -238,13 +260,13 @@ async function mintUserBatches(mintArray: any[]) {
 
 async function main() {
   //loads the database with burns
-  //loadBurnTransfers(await getBurnTransfers());
+  loadBurnTransfers(await getBurnTransfers());
 
   //loads the mint array which is going to be passed to the minting function
-  const result = await loadUserMintArray();
-  console.log(mintUserBatches(result));
+  //const result = await batchMintArray(await loadUserMintArray());
+  //cleanMintArray(result);
 
-  //mintUserBatches(await loadUserMintArray());
+  //batchMintArray(await loadUserMintArray());
 
 }
 
