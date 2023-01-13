@@ -1,13 +1,13 @@
 import Moralis from "moralis";
 import { EvmChain, EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
-import { PrismaClient } from '@prisma/client'
+import { prisma, PrismaClient } from '@prisma/client'
 import { getClient } from './utils'
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 dotenv.config();
 
 
-async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
+async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], from_block: number, to_block: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
 
   //console.log(process.env.MORALIS_API_KEY);
 
@@ -16,12 +16,31 @@ async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: s
     apiKey: process.env.MORALIS_API_KEY,
   });
 
+  const todayDate = new Date();
+  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+    date: todayDate.toString(),
+    chain: EvmChain.BSC,
+  });
+  const currentblock = currentblockresponse.result.block;
+
+  //Check to make sure the user has put a block number that's not higher than the current block
+  if (to_block > currentblock) {
+    console.log("Trying to get a block higher than the current block, setting to current block");
+    to_block = currentblock;
+  }
+
+  //Check to make sure the from_block is less than the to_block
+  if (from_block > to_block) {
+    console.log("Trying to get a from_block higher than the to_block, setting from_block to 1");
+    from_block = 1;
+  }
+
   //Get all transfers for a collection address and chain
   const response = await Moralis.EvmApi.nft.getNFTContractTransfers({
     address: process.env.ORIGIN_COLLECTION_ADDRESS!,
     chain: EvmChain.BSC,
-    from_block: 21739231,
-    to_block: 22739231,
+    from_block: from_block,
+    to_block: to_block,
     cursor: cursor
   });
 
@@ -32,7 +51,7 @@ async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: s
 
   //Iterate through and sort out the burn transfers and push them into an array, make sure no duplicate tokenIDs are loaded
   const burnAddress = EvmAddress.create(process.env.BURN_ADDRESS!);
-  for(const element of response.result) {
+  for (const element of response.result) {
     if (element.toAddress.lowercase == burnAddress.lowercase && !usedtokenids.includes(element.tokenId)) {
       burnTransfers.push(element);
       usedtokenids.push(element.tokenId);
@@ -41,19 +60,44 @@ async function getBurnTransfers(burnTransfers: EvmNftTransfer[] = [], cursor?: s
 
   //Check if there's additional pages and cursor through them
   //If index is included, it's because you want to limit the requests while testing
-  if (response.pagination && index < 100) {
-    console.log(response.pagination.cursor)
+  //if (response.pagination && index < 5) {
+  if (response.pagination && index < 5) {
+    console.log("Cursing through page " + (index+1) + " of transfers in block range " + from_block + "-" + to_block + "...");
     index++;
-    return await getBurnTransfers(burnTransfers, response.pagination.cursor, index, usedtokenids);
+    return await getBurnTransfersByBlockRange(burnTransfers, from_block, to_block, response.pagination.cursor, index, usedtokenids);
   }
+
+  console.log("Found " + burnTransfers.length + " burn transfers in block range")
   return burnTransfers;
 }
 
+async function backFillBurnTransfers(from_block: number, to_block: number, blockinterval: number) {
+  const prisma = new PrismaClient();
 
-async function loadBurnTransfers(burnTransfers: EvmNftTransfer[]) {
+  const backfills: number = Math.floor((to_block - from_block) / blockinterval);
 
-  const prisma = new PrismaClient()
-  console.log("Length of burn transfers: " + burnTransfers.length);
+  console.log("Batches of blocks to backfill: " + backfills);
+
+  let indexblock = from_block;
+
+  while (indexblock < to_block) {
+    //If you're at the end, make sure you don't go past to_block
+    if (indexblock + blockinterval > to_block) {
+      blockinterval = to_block - indexblock;
+    }
+    console.log("Getting blocks in block range: " + indexblock + "-" + (indexblock + blockinterval));
+    const burnTransfers = await getBurnTransfersByBlockRange([], indexblock, indexblock + blockinterval);
+    if (burnTransfers.length > 0) {
+      await loadBurnTransfers(burnTransfers, prisma);
+    }
+    indexblock += blockinterval;
+  }
+
+  console.log('Done backfilling burn transfers in block range ' + from_block + '-' + to_block);
+}
+
+async function loadBurnTransfers(burnTransfers: EvmNftTransfer[], prisma: PrismaClient) {
+  console.log("Loading " + burnTransfers.length + " burn transfers into the database");
   for (const element of burnTransfers) {
     try {
       const burn = await prisma.burn.create({
@@ -77,7 +121,6 @@ async function loadBurnTransfers(burnTransfers: EvmNftTransfer[]) {
   }
   prisma.$disconnect
 }
-
 
 async function loadUserMintArray() {
   const prisma = new PrismaClient();
@@ -123,24 +166,6 @@ async function loadUserMintArray() {
     index++;
   }
   return mintArray;
-}
-
-async function cleanMintArray(mintArray: any[]) {
-  //Remove burn addresses, no need to mint to them
-  for (const element of mintArray) {
-    if (element.users[0].etherKey == process.env.BURN_ADDRESS) {
-      mintArray.splice(mintArray.indexOf(element), 1);
-    }
-  }
-
-  //Write everything to file
-  fs.writeFile('src/testing/cleanedMintArray.json', JSON.stringify(mintArray, null, '\t'), (err) => {
-    if (err) {
-      console.error(err);
-    } else {
-      console.log("Cleaned mint array written to data/batchifiedMintArray.json");
-    }
-  });
 }
 
 async function batchMintArray(mintArray: any[]) {
@@ -250,23 +275,56 @@ async function batchMintArray(mintArray: any[]) {
   return mintArray;
 }
 
+async function findMax() {
+  const prisma = new PrismaClient();
+  const results = await prisma.burn.findMany({
+    orderBy: [
+      {
+        blockNumber: 'desc',
+      }
+    ]
+  })
 
+  //create moralis client
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
 
+  const todayDate = new Date();
+  const test = todayDate.toString();
+  console.log(todayDate);
+  const response = await Moralis.EvmApi.block.getDateToBlock({
+    date: test,
+    chain: EvmChain.BSC,
+  });
+  console.log(response);
+
+  console.log("Max: " + results[0].blockNumber);
+  console.log("Min: " + results[results.length - 1].blockNumber);
+}
 
 
 // async function main() {
-//   loadBurnTransfers(await getBurnTransfers());
+//   loadBurnTransfers(await getBurnTransfersByBlockRange());
 // }
 
 async function main() {
   //loads the database with burns
-  loadBurnTransfers(await getBurnTransfers());
+  //const prisma = new PrismaClient();
+  //loadBurnTransfers(await getBurnTransfersByBlockRange(undefined, 21739231,22739231), prisma);
+  //loadBurnTransfers(await getBurnTransfersByBlockRange(undefined, 23685458,24685458));
 
   //loads the mint array which is going to be passed to the minting function
   //const result = await batchMintArray(await loadUserMintArray());
   //cleanMintArray(result);
 
   //batchMintArray(await loadUserMintArray());
+
+  //find the max block number
+  //findMax();
+
+  //backfills a certain range
+  backFillBurnTransfers(1200000, 22739231, 1000000);
 
 }
 
