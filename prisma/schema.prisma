@@ -18,7 +18,7 @@ model Burn {
   blockTimestamp DateTime
   txHash String
   tokenAddress String
-  tokenId String
+  tokenId String  @unique
   fromAddress String?
   toAddress String
 }

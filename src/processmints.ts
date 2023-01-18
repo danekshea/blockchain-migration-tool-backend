@@ -1,6 +1,6 @@
 import Moralis from "moralis";
 import { EvmChain, EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
-import { prisma, PrismaClient } from '@prisma/client'
+import { Prisma, prisma, PrismaClient } from '@prisma/client'
 import { getClient } from './utils'
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -8,9 +8,6 @@ dotenv.config();
 
 
 async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], from_block: number, to_block: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
-
-  //console.log(process.env.MORALIS_API_KEY);
-
   //Create the Moralis client
   await Moralis.start({
     apiKey: process.env.MORALIS_API_KEY,
@@ -34,6 +31,13 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
     console.log("Trying to get a from_block higher than the to_block, setting from_block to 1");
     from_block = 1;
   }
+
+  //Moralis doesn't allow requests for more than 1m blocks at a time
+  if(to_block - from_block > 1000000) {
+    console.log("Moralis API doesn't allow more than 1 million blocks in a request, setting to_block to " + from_block+1000000);
+    to_block = from_block+1000000;
+  }
+
 
   //Get all transfers for a collection address and chain
   try {
@@ -62,8 +66,9 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
     //Check if there's additional pages and cursor through them
     //If index is included, it's because you want to limit the requests while testing
     //if (response.pagination && index < 5) {
-    if (response.pagination && index < 5) {
+    if (response.pagination.cursor != null) {
       console.log("Cursing through page " + (index + 1) + " of transfers in block range " + from_block + "-" + to_block + "...");
+      console.log(response.pagination);
       index++;
       return await getBurnTransfersByBlockRange(burnTransfers, from_block, to_block, response.pagination.cursor, index, usedtokenids);
     }
@@ -81,6 +86,11 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
 }
 
 async function backFillBurnTransfers(prisma: PrismaClient, from_block: number, to_block: number, blockinterval: number) {
+  if((to_block-from_block) < blockinterval) {
+    console.log("Block interval is larger than the block range, setting block interval to block range");
+    blockinterval = to_block-from_block;
+  }
+  
   const backfills: number = (to_block - from_block) / blockinterval;
   console.log("Batches of blocks to backfill: " + backfills);
 
@@ -334,10 +344,20 @@ async function findMax() {
   console.log("Min: " + results[results.length - 1].blockNumber);
 }
 
-
-// async function main() {
-//   loadBurnTransfers(await getBurnTransfersByBlockRange());
-// }
+async function getCurrentBlock() {
+    //Create the Moralis client
+    await Moralis.start({
+      apiKey: process.env.MORALIS_API_KEY,
+    });
+  
+    const todayDate = new Date();
+    const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+      date: todayDate.toString(),
+      chain: EvmChain.BSC,
+    });
+    const currentblock = currentblockresponse.result.block;
+    return currentblock;
+}
 
 async function main() {
   //loads the database with burns
@@ -359,7 +379,15 @@ async function main() {
 
   //backfills and monitors
   const prisma = new PrismaClient();
-  monitorBurnTransfers(prisma, 24824656, 10);
+  await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
+  monitorBurnTransfers(prisma, 24862889, 100);
+
+  //gets current block
+  //console.log(await getCurrentBlock());
+
+  //pulls token ids from db
+  // const prisma = new PrismaClient();
+  // console.log(await pullTokenIDsFromDB(prisma));
 }
 
 main();
