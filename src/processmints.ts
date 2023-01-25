@@ -1,7 +1,7 @@
 import Moralis from "moralis";
 import { EvmChain, EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
 import { PrismaClient } from '@prisma/client'
-import { ImmutableX, Config, IMXError } from '@imtbl/core-sdk';
+import { ImmutableX, Config, IMXError, UnsignedMintRequest } from '@imtbl/core-sdk';
 import { getSigner } from './utils';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
@@ -206,10 +206,10 @@ async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
     if (isRegistered) {
       mintArray[index] = {
         users: [{
-          etherKey: key.toLowerCase(),
+          user: key.toLowerCase(),
           tokens: tokensArray[key]
         }],
-        contractAddress: process.env.DESTINATION_COLLECTION_ADDRESS
+        contract_address: process.env.DESTINATION_COLLECTION_ADDRESS
       }
       index++;
     }
@@ -300,8 +300,8 @@ async function batchMintArray(mintArray: any[]) {
     //console.log(element[0][1]);
     //console.log(element[0][1].length);
   }
-  console.log("length of original: " + mintArray.length);
-  console.log("length of batchified version: " + batchifiedMintArray.length);
+  console.log("Length of original: " + mintArray.length);
+  console.log("Length of batchified version: " + batchifiedMintArray.length);
 
   //Write everything to file
   fs.writeFile('src/testing/mintArray.json', JSON.stringify(mintArray, null, '\t'), (err) => {
@@ -327,8 +327,7 @@ async function batchMintArray(mintArray: any[]) {
 async function mintBatchArray(imxclient: ImmutableX, mintArray: any[]) {
   for(const element of mintArray) {
     const signer = await getSigner("sandbox", process.env.MINTER_PRIVATE_KEY!);
-    
-    console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].etherKey);
+    console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     const result = await imxclient.mint(signer, element);
     console.log(result);
   }
@@ -399,7 +398,9 @@ async function main() {
   // const prisma = new PrismaClient();
   // const config = Config.SANDBOX
   // const imxclient = new ImmutableX(config);
-  // batchMintArray(await loadUserMintArray(imxclient, prisma));
+  // const batchArray = await batchMintArray(await loadUserMintArray(imxclient, prisma));
+  // console.log(batchArray);
+  // mintBatchArray(imxclient, batchArray);
 
   //Check if user is registered
   //console.log(await isIMXRegistered("0xfaDcF1dEe4D008E02e9E97513081C320Ac2748B3"));
@@ -411,9 +412,9 @@ async function main() {
   //backFillBurnTransfers(1200000, 22739231, 1000000);
 
   //backfills and monitors
-  const prisma = new PrismaClient();
+  // const prisma = new PrismaClient();
   //await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
-  monitorBurnTransfers(prisma, 25078995, 100);
+  // monitorBurnTransfers(prisma, 25078995, 100);
 
   //gets current block
   //console.log(await getCurrentBlock());
