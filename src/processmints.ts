@@ -1,11 +1,11 @@
 import Moralis from "moralis";
 import { EvmChain, EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
-import { Prisma, prisma, PrismaClient } from '@prisma/client'
-import { getClient } from './utils'
+import { PrismaClient } from '@prisma/client'
+import { ImmutableX, Config, IMXError } from '@imtbl/core-sdk';
+import { getSigner } from './utils';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 dotenv.config();
-
 
 async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], from_block: number, to_block: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
   //Create the Moralis client
@@ -33,9 +33,9 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
   }
 
   //Moralis doesn't allow requests for more than 1m blocks at a time
-  if(to_block - from_block > 1000000) {
-    console.log("Moralis API doesn't allow more than 1 million blocks in a request, setting to_block to " + from_block+1000000);
-    to_block = from_block+1000000;
+  if (to_block - from_block > 1000000) {
+    console.log("Moralis API doesn't allow more than 1 million blocks in a request, setting to_block to " + from_block + 1000000);
+    to_block = from_block + 1000000;
   }
 
 
@@ -86,11 +86,11 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
 }
 
 async function backFillBurnTransfers(prisma: PrismaClient, from_block: number, to_block: number, blockinterval: number) {
-  if((to_block-from_block) < blockinterval) {
+  if ((to_block - from_block) < blockinterval) {
     console.log("Block interval is larger than the block range, setting block interval to block range");
-    blockinterval = to_block-from_block;
+    blockinterval = to_block - from_block;
   }
-  
+
   const backfills: number = (to_block - from_block) / blockinterval;
   console.log("Batches of blocks to backfill: " + backfills);
 
@@ -118,25 +118,32 @@ async function monitorBurnTransfers(prisma: PrismaClient, last_polled_block: num
     apiKey: process.env.MORALIS_API_KEY,
   });
 
-  const todayDate = new Date();
-  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
-    date: todayDate.toString(),
-    chain: EvmChain.BSC,
-  });
-  const currentblock = currentblockresponse.result.block;
+  try {
+    const todayDate = new Date();
+    const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+      date: todayDate.toString(),
+      chain: EvmChain.BSC,
+    });
+    const currentblock = currentblockresponse.result.block;
 
-  if (currentblock - last_polled_block >= block_polling_interval) {
-    console.log("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
-    await backFillBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
-    monitorBurnTransfers(prisma, currentblock, block_polling_interval);
+    if (currentblock - last_polled_block >= block_polling_interval) {
+      console.log("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
+      await backFillBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
+      monitorBurnTransfers(prisma, currentblock, block_polling_interval);
+    }
+    else {
+      console.log("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
+      //Delay before checking again
+      await new Promise(f => setTimeout(f, 1000));
+      monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
+    }
   }
-  else {
-    console.log("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
-    //Delay before checking again
+  catch (err) {
+    console.log(err);
+    console.log("Errored out, retrying in 1 second...");
     await new Promise(f => setTimeout(f, 1000));
     monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
   }
-
 }
 
 async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTransfer[]) {
@@ -165,30 +172,26 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTran
   prisma.$disconnect
 }
 
-async function loadUserMintArray(prisma: PrismaClient) {
+async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
+  //Pull tokens that haven't been minted yet from the DB
   const burnTransfers = await prisma.burn.findMany({
     where: { minted: 0 },
   });
 
-  //IPFS Blueprint CID
-  const CID = 'bafybeihj3uuw24fioheuxkpupgnnxx44vdezzmo5fr7m6dv3dfjgawvcwy'
-
-  //Token address for the collection you want to mint to
-  const tokenAddress = '0x43b2a84416bdad7091148a97f4c974dc0c2f0227';
-
+  //Go through each token and add an entry for each user or add to an additional user entry, mint requests are broken down by user
   let tokensArray: { [receiverAddress: string]: any[] } = {};
   for (const burn of burnTransfers) {
     if (burn.fromAddress) {
       if (tokensArray[burn.fromAddress]) {
         tokensArray[burn.fromAddress].push({
           id: burn.tokenId,
-          blueprint: 'ipfs://' + CID + '/' + burn.tokenId
+          blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + burn.tokenId
         });
       }
       else {
         tokensArray[burn.fromAddress] = [{
           id: burn.tokenId,
-          blueprint: 'ipfs://' + CID + '/' + burn.tokenId
+          blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + burn.tokenId
         }];
       }
     }
@@ -197,14 +200,22 @@ async function loadUserMintArray(prisma: PrismaClient) {
   let mintArray = [];
   let index = 0;
   for (let key in tokensArray) {
-    mintArray[index] = {
-      users: [{
-        etherKey: key.toLowerCase(),
-        tokens: tokensArray[key]
-      }],
-      contractAddress: tokenAddress
+    //Check if the user is registered on IMX
+    const isRegistered = await isIMXRegistered(imxclient, key);
+    console.log("Checking if recipient address " + key + " is registered on IMX");
+    if (isRegistered) {
+      mintArray[index] = {
+        users: [{
+          etherKey: key.toLowerCase(),
+          tokens: tokensArray[key]
+        }],
+        contractAddress: process.env.DESTINATION_COLLECTION_ADDRESS
+      }
+      index++;
     }
-    index++;
+    else {
+      console.log("Recipient address " + key + " is not registered on IMX, skipping...");
+    }
   }
   return mintArray;
 }
@@ -216,9 +227,6 @@ async function batchMintArray(mintArray: any[]) {
 
   //Delays between mint requests, recommendation is >200, at 200ms, we have 5 RPS
   const requestdelays = process.env.MINTING_BATCH_DELAY;
-
-  //Create the IMX client for minting
-  const client = await getClient('sandbox', process.env.MINTER_PRIVATE_KEY);
 
   let batchifiedMintArray = [];
 
@@ -316,6 +324,16 @@ async function batchMintArray(mintArray: any[]) {
   return mintArray;
 }
 
+async function mintBatchArray(imxclient: ImmutableX, mintArray: any[]) {
+  for(const element of mintArray) {
+    const signer = await getSigner("sandbox", process.env.MINTER_PRIVATE_KEY!);
+    
+    console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].etherKey);
+    const result = await imxclient.mint(signer, element);
+    console.log(result);
+  }
+}
+
 async function findMax() {
   const prisma = new PrismaClient();
   const results = await prisma.burn.findMany({
@@ -345,18 +363,30 @@ async function findMax() {
 }
 
 async function getCurrentBlock() {
-    //Create the Moralis client
-    await Moralis.start({
-      apiKey: process.env.MORALIS_API_KEY,
-    });
-  
-    const todayDate = new Date();
-    const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
-      date: todayDate.toString(),
-      chain: EvmChain.BSC,
-    });
-    const currentblock = currentblockresponse.result.block;
-    return currentblock;
+  //Create the Moralis client
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+
+  const todayDate = new Date();
+  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+    date: todayDate.toString(),
+    chain: EvmChain.BSC,
+  });
+  const currentblock = currentblockresponse.result.block;
+  return currentblock;
+}
+
+//Check if the user is registered onchain
+async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string): Promise<boolean> {
+  try {
+    const isRegistered = await imxclient.getUser(ethaddress);
+    return true;
+  }
+  catch (err) {
+    console.log(err);
+    return false;
+  }
 }
 
 async function main() {
@@ -366,10 +396,13 @@ async function main() {
   //loadBurnTransfers(await getBurnTransfersByBlockRange(undefined, 23685458,24685458));
 
   //loads the mint array which is going to be passed to the minting function
-  //const result = await batchMintArray(await loadUserMintArray());
-  //cleanMintArray(result);
+  // const prisma = new PrismaClient();
+  // const config = Config.SANDBOX
+  // const imxclient = new ImmutableX(config);
+  // batchMintArray(await loadUserMintArray(imxclient, prisma));
 
-  //batchMintArray(await loadUserMintArray());
+  //Check if user is registered
+  //console.log(await isIMXRegistered("0xfaDcF1dEe4D008E02e9E97513081C320Ac2748B3"));
 
   //find the max block number
   //findMax();
@@ -379,15 +412,11 @@ async function main() {
 
   //backfills and monitors
   const prisma = new PrismaClient();
-  await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
-  monitorBurnTransfers(prisma, 24862889, 100);
+  //await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
+  monitorBurnTransfers(prisma, 25078995, 100);
 
   //gets current block
   //console.log(await getCurrentBlock());
-
-  //pulls token ids from db
-  // const prisma = new PrismaClient();
-  // console.log(await pullTokenIDsFromDB(prisma));
 }
 
 main();

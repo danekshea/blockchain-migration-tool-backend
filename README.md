@@ -19,6 +19,7 @@ Please make sure to update tests as appropriate.
 ## Immediate to-do
 *There's duplicate tokenIDs in the dataset, these are also found in the DB. Before troubleshooting this issue, likely just look to rewrite the loading script to be block by block rather than the current setup.
 *Remember to remove index limiter in the block scanner, it's currently only doing 100 iterations
+*Add error handling to checking if users are registered on IMX, currently the error handling doesn't account for rate limiting issues etc.
 
 ## Long-term to-do
 *Improve the loading of the DB to be based on blocks rather than time or sequential
