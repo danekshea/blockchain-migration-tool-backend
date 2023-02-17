@@ -8,7 +8,9 @@ A blockchain migration tool for migrating from EVM based chains to Immutable X.
 
 ## Usage
 PM2 works is useful for running this as a daemon that's regularly scanning for new burns.
-```pm2 start ./src/processmints.ts --interpreter /Users/daneshea/.nvm/versions/node/v16.16.0/bin/ts-node --watch --name burn-watcher```
+```
+pm2 start ./src/processmints.ts --interpreter /Users/daneshea/.nvm/versions/node/v16.16.0/bin/ts-node --watch --name burn-watcher
+```
 
 ## Contributing
 
