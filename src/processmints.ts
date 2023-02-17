@@ -412,9 +412,9 @@ async function main() {
   //backFillBurnTransfers(1200000, 22739231, 1000000);
 
   //backfills and monitors
-  // const prisma = new PrismaClient();
+  const prisma = new PrismaClient();
   //await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
-  // monitorBurnTransfers(prisma, 25078995, 100);
+  monitorBurnTransfers(prisma, 25736061, 10);
 
   //gets current block
   //console.log(await getCurrentBlock());
