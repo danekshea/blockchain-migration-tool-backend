@@ -1,28 +1,9 @@
-import { ImmutableXClient } from '@imtbl/imx-sdk';
+import { ImmutableX, Config } from '@imtbl/core-sdk';
 import { ethers, Wallet } from 'ethers';
+import Moralis from "moralis";
+import { PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
 dotenv.config();
-
-/**
- * Return the ImmutableXClient for a given user (i.e. wallet). This is
- * used to sign the corresponding requests.s
- * @param privateKey - Ethereum wallet private key
- * @param gasLimit - maximum amount of Gas that a user is willing to pay for performing this action or confirming a transaction (a minimum of 21,000)
- * @param gasPrice - price of Gas (Gas Price) is the amount of Gwei that the user is willing to spend on each unit of Gas
- */
-export async function getClient(network: string, privateKey?: string, gasLimit?: string, gasPrice?: string)
-  : Promise<ImmutableXClient> {
-      const provider = new ethers.providers.JsonRpcProvider((network == "mainnet") ? process.env.MAINNET_ETH_PROVIDER_URL : process.env.SANDBOX_ETH_PROVIDER_URL);
-      const signer = privateKey ? new Wallet(privateKey).connect(provider) : undefined
-      return await ImmutableXClient.build({ 
-        publicApiUrl: (network == "mainnet") ? process.env.MAINNET_ENV_URL! :  process.env.SANDBOX_ENV_URL!,
-        signer,
-        starkContractAddress: (network == "mainnet") ? process.env.MAINNET_STARK_CONTRACT_ADDRESS : process.env.SANDBOX_STARK_CONTRACT_ADDRESS,
-        registrationContractAddress: (network == "mainnet") ? process.env.MAINNET_REGISTRATION_CONTRACT_ADDRESS : process.env.SANDBOX_REGISTRATION_CONTRACT_ADDRESS,
-        gasLimit: gasLimit ? gasLimit : undefined,
-        gasPrice: gasPrice ? gasPrice : undefined
-  })
-}
 
 export async function getSigner(network: string, privateKey: string)
   : Promise<Wallet> {
@@ -30,4 +11,44 @@ export async function getSigner(network: string, privateKey: string)
       const signer = new Wallet(privateKey).connect(provider)
       ethers.utils.verifyMessage
       return signer
+}
+
+//Gets the current block
+export async function getCurrentBlock() {
+  //Create the Moralis client
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+
+  const todayDate = new Date();
+  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+    date: todayDate.toString(),
+    chain: process.env.ORIGIN_CHAIN_ID,
+  });
+  const currentblock = currentblockresponse.result.block;
+  return currentblock;
+}
+
+//Check if the user is registered onchain
+export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string): Promise<boolean> {
+  try {
+    const isRegistered = await imxclient.getUser(ethaddress);
+    return true;
+  }
+  catch (err) {
+    console.log(err);
+    return false;
+  }
+}
+
+async function findDBMax(prisma: PrismaClient) {
+  const results = await prisma.burn.findMany({
+    orderBy: [
+      {
+        blockNumber: 'desc',
+      }
+    ]
+  })
+  console.log("Max: " + results[0].blockNumber);
+  console.log("Min: " + results[results.length - 1].blockNumber);
 }

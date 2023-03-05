@@ -1,8 +1,10 @@
 import Moralis from "moralis";
-import { EvmChain, EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
+import { EvmNftTransfer, EvmAddress } from '@moralisweb3/evm-utils';
 import { PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
+import { getCurrentBlock } from "./utils";
 dotenv.config();
+
 
 async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], from_block: number, to_block: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
   //Create the Moralis client
@@ -13,7 +15,7 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
-    chain: EvmChain.BSC,
+    chain: process.env.ORIGIN_CHAIN_ID,
   });
   const currentblock = currentblockresponse.result.block;
 
@@ -40,7 +42,7 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
   try {
     const response = await Moralis.EvmApi.nft.getNFTContractTransfers({
       address: process.env.ORIGIN_COLLECTION_ADDRESS!,
-      chain: EvmChain.BSC,
+      chain: process.env.ORIGIN_CHAIN_ID,
       from_block: from_block,
       to_block: to_block,
       cursor: cursor
@@ -109,40 +111,7 @@ async function backFillBurnTransfers(prisma: PrismaClient, from_block: number, t
   console.log('Done backfilling burn transfers in block range ' + from_block + '-' + to_block);
 }
 
-async function monitorBurnTransfers(prisma: PrismaClient, last_polled_block: number, block_polling_interval: number) {
-  //Create the Moralis client
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
-
-  try {
-    const todayDate = new Date();
-    const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
-      date: todayDate.toString(),
-      chain: EvmChain.BSC,
-    });
-    const currentblock = currentblockresponse.result.block;
-
-    if (currentblock - last_polled_block >= block_polling_interval) {
-      console.log("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
-      await backFillBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
-      monitorBurnTransfers(prisma, currentblock, block_polling_interval);
-    }
-    else {
-      console.log("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
-      //Delay before checking again
-      await new Promise(f => setTimeout(f, 1000));
-      monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
-    }
-  }
-  catch (err) {
-    console.log(err);
-    console.log("Errored out, retrying in 1 second...");
-    await new Promise(f => setTimeout(f, 1000));
-    monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
-  }
-}
-
+//Loads the burn transfers into the database
 async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTransfer[]) {
   console.log("Loading " + burnTransfers.length + " burn transfers into the database");
   for (const element of burnTransfers) {
@@ -169,47 +138,39 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTran
   prisma.$disconnect
 }
 
-async function findMax() {
-  const prisma = new PrismaClient();
-  const results = await prisma.burn.findMany({
-    orderBy: [
-      {
-        blockNumber: 'desc',
-      }
-    ]
-  })
-
-  //create moralis client
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
-
-  const todayDate = new Date();
-  const test = todayDate.toString();
-  console.log(todayDate);
-  const response = await Moralis.EvmApi.block.getDateToBlock({
-    date: test,
-    chain: EvmChain.BSC,
-  });
-  console.log(response);
-
-  console.log("Max: " + results[0].blockNumber);
-  console.log("Min: " + results[results.length - 1].blockNumber);
-}
-
-async function getCurrentBlock() {
+//Monitors looking forward from the last polled block at a specified interval
+async function monitorBurnTransfers(prisma: PrismaClient, last_polled_block: number, block_polling_interval: number) {
   //Create the Moralis client
   await Moralis.start({
     apiKey: process.env.MORALIS_API_KEY,
   });
 
-  const todayDate = new Date();
-  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
-    date: todayDate.toString(),
-    chain: EvmChain.BSC,
-  });
-  const currentblock = currentblockresponse.result.block;
-  return currentblock;
+  try {
+    const todayDate = new Date();
+    const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
+      date: todayDate.toString(),
+      chain: process.env.ORIGIN_CHAIN_ID,
+    });
+    const currentblock = currentblockresponse.result.block;
+
+    if (currentblock - last_polled_block >= block_polling_interval) {
+      console.log("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
+      await backFillBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
+      monitorBurnTransfers(prisma, currentblock, block_polling_interval);
+    }
+    else {
+      console.log("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
+      //Delay before checking again
+      await new Promise(f => setTimeout(f, 1000));
+      monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
+    }
+  }
+  catch (err) {
+    console.log(err);
+    console.log("Errored out, retrying in 1 second...");
+    await new Promise(f => setTimeout(f, 1000));
+    monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
+  }
 }
 
 async function main() {
@@ -222,7 +183,9 @@ async function main() {
   //backfills and monitors
   const prisma = new PrismaClient();
   //await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
-  monitorBurnTransfers(prisma, 25824474, 5);
+
+  const currentBlock = await getCurrentBlock();
+  monitorBurnTransfers(prisma, currentBlock, 5);
 
   //gets current block
   //console.log(await getCurrentBlock());
