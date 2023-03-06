@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { ImmutableX, Config } from '@imtbl/core-sdk';
+import { minting_batch_size, minting_batch_delay, minting_request_delay } from './config';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import { getSigner, isIMXRegistered } from './utils';
@@ -54,27 +55,20 @@ async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
   return mintArray;
 }
 
-
+//Batches the token mints and returns an array of mints
 async function batchMintArray(mintArray: any[]) {
-
-  //Mints per batch
-  const batchsize = parseInt(process.env.MINTING_BATCH_SIZE!);
-
-  //Delays between mint requests, recommendation is >200, at 200ms, we have 5 RPS
-  const requestdelays = process.env.MINTING_BATCH_DELAY;
-
   let batchifiedMintArray = [];
 
   for (const element of mintArray) {
-    if (element.users[0].tokens.length > batchsize) {
+    if (element.users[0].tokens.length > minting_batch_size) {
       console.log('Batching ' + element.users[0].tokens.length + ' tokens for ' + element.users[0].etherKey);
 
       //calculate the amount of batches
-      const batchcount = Math.floor(element.users[0].tokens.length / batchsize);
+      const batchcount = Math.floor(element.users[0].tokens.length / minting_batch_size);
       console.log('Batch count: ' + batchcount);
 
       //calculate the remainder after the batches have been created
-      const remainder = element.users[0].tokens.length % batchsize;
+      const remainder = element.users[0].tokens.length % minting_batch_size;
       console.log('Remainder: ' + remainder);
 
       //loop for the batches
@@ -86,7 +80,7 @@ async function batchMintArray(mintArray: any[]) {
 
         let j: number = 0
 
-        while (j < batchsize) {
+        while (j < minting_batch_size) {
           //Create the token array according to the batch size
           tokens[j] = {
             id: element.users[0].tokens[j + tokenindex].id,
@@ -159,9 +153,10 @@ async function batchMintArray(mintArray: any[]) {
   return mintArray;
 }
 
-async function mintBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintArray: any[]) {
+//Mints the batches of a mint array
+async function mintBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintArray: any[], network: string) {
   for (const element of mintArray) {
-    const signer = await getSigner("sandbox", process.env.MINTER_PRIVATE_KEY!);
+    const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
     console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
       const result = await imxclient.mint(signer, element);
@@ -184,24 +179,28 @@ async function mintBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintA
       console.log(error);
     }
   }
+  //Optional timeout to prevent rate limiting
+  await new Promise(r => setTimeout(r, minting_batch_delay));
 }
 
-async function runRegularMint(prisma: PrismaClient) {
+//Runs the minting function every 10 seconds
+async function runRegularMint(imxclient: ImmutableX, prisma: PrismaClient, network: string) {
   console.log("Checking for new mints...");
   //loads the mint array which is going to be passed to the minting function
-  const config = Config.SANDBOX
-  const imxclient = new ImmutableX(config);
   const batchArray = await batchMintArray(await loadUserMintArray(imxclient, prisma));
-  mintBatchArray(imxclient, prisma, batchArray);
+  mintBatchArray(imxclient, prisma, batchArray, network);
 
-  //10 seconds delay
-  await new Promise(r => setTimeout(r, 5000));
-  runRegularMint(prisma);
+  //Delay before running again
+  await new Promise(r => setTimeout(r, minting_request_delay));
+  runRegularMint(imxclient, prisma, network);
 }
+
 
 async function main() {
   const prisma = new PrismaClient();
-  runRegularMint(prisma);
+  const config = (process.env.NETWORK == "mainnet") ? Config.PRODUCTION : Config.SANDBOX
+  const imxclient = new ImmutableX(config);
+  runRegularMint(imxclient, prisma, process.env.NETWORK!);
 }
 
 main();

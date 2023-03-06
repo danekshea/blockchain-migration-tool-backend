@@ -31,11 +31,11 @@ to discuss what you would like to change.
 Please make sure to update tests as appropriate.
 
 ## Immediate to-do
-*Add error handling to checking if users are registered on IMX, currently the error handling doesn't account for rate limiting issues etc.
+* Add error handling to checking if users are registered on IMX, currently the error handling doesn't account for rate limiting issues etc.
 
 ## Long-term to-do
-*Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
-*Introduce types for the mint arrays etc.
+* Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
+* Introduce types for the mint arrays etc.
 
 ## License
 

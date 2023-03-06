@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 import { getCurrentBlock } from "./utils";
 dotenv.config();
 
-
+//Retrieves the burn transfers from a certain block range and curses through them recursively
 async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], from_block: number, to_block: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
   //Create the Moralis client
   await Moralis.start({
@@ -84,6 +84,7 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
 
 }
 
+//Backfills burn transfers into the DB in the range defined at the block interval also defined, this is typically used for catching up rather than active monitoring
 async function backFillBurnTransfers(prisma: PrismaClient, from_block: number, to_block: number, blockinterval: number) {
   if ((to_block - from_block) < blockinterval) {
     console.log("Block interval is larger than the block range, setting block interval to block range");
@@ -173,22 +174,11 @@ async function monitorBurnTransfers(prisma: PrismaClient, last_polled_block: num
   }
 }
 
+//Just monitor from the current block forward
 async function main() {
-  //find the max block number
-  //findMax();
-
-  //backfills a certain range
-  //backFillBurnTransfers(1200000, 22739231, 1000000);
-
-  //backfills and monitors
   const prisma = new PrismaClient();
-  //await backFillBurnTransfers(prisma, 23862889, 24862889, 25000);
-
   const currentBlock = await getCurrentBlock();
   monitorBurnTransfers(prisma, currentBlock, 5);
-
-  //gets current block
-  //console.log(await getCurrentBlock());
 }
 
 main();
