@@ -14,7 +14,9 @@ The following EVM origin chains are supported:
 * Polygon PoS
 
 ## Installation
-```npm install```
+```bash
+npm install
+```
 
 Rename .env.example to .env and complete the configuration.
 
