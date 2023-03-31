@@ -14,9 +14,21 @@ The following EVM origin chains are supported:
 * Polygon PoS
 
 ## Installation
+Install all the dependencies:
 ```bash
 npm install
 ```
+Copy the .env.example file and rename it to .env
+```bash
+cp .env.example .env
+```
+Fill in the .env file with the required information.
+
+Initialize the database:
+```bash
+npx prisma migrate dev --name init
+```
+
 
 Rename .env.example to .env and complete the configuration.
 

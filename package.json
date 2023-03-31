@@ -10,11 +10,12 @@
   "dependencies": {
     "@imtbl/core-sdk": "^1.0.0",
     "@imtbl/imx-sdk": "^1.37.3",
+    "@moralisweb3/common-evm-utils": "^2.18.1",
     "@prisma/client": "^4.6.1",
     "dotenv": "^16.0.3",
     "ethers": "^5.7.2",
     "imx-sdk": "^1.0.0-alpha",
-    "moralis": "^2.7.4",
+    "moralis": "^2.18.1",
     "pm2": "^5.2.2"
   },
   "repository": {

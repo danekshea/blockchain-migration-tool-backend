@@ -13,7 +13,7 @@ datasource db {
 model Burn {
   id    Int     @id @default(autoincrement())
   minted Int
-  chain String
+  chain Int
   blockNumber String
   blockTimestamp DateTime
   txHash String

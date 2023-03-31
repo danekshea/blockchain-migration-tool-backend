@@ -15,11 +15,6 @@ export async function getSigner(network: string, privateKey: string)
 
 //Gets the current block
 export async function getCurrentBlock() {
-  //Create the Moralis client
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
-
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
