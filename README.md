@@ -28,12 +28,17 @@ Initialize the database:
 ```bash
 npx prisma migrate dev --name init
 ```
-
-
 Rename .env.example to .env and complete the configuration.
 
 ## Usage
-
+Launch the watcher:
+```bash
+npm run watcher
+```
+Launch the minter:
+```bash
+npm run minter
+```
 
 Make sure to run each concurrently for successful migrations to happen.
 
