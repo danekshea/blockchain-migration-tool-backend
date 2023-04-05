@@ -42,6 +42,13 @@ npm run minter
 
 Make sure to run each concurrently for successful migrations to happen.
 
+In production, you'd likely run this with a process manager like pm2.
+```bash
+pm2 start npm --name "watcher" -- run watcher
+```
+```bash
+pm2 start npm --name "minter" -- run minter
+```
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first

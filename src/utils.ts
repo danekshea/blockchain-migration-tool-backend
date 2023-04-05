@@ -1,8 +1,9 @@
-import { ImmutableX, Config } from '@imtbl/core-sdk';
+import { ImmutableX } from '@imtbl/core-sdk';
 import { ethers, Wallet } from 'ethers';
 import Moralis from "moralis";
 import { PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
+import { originChainId } from './config';
 dotenv.config();
 
 export async function getSigner(network: string, privateKey: string)
@@ -14,11 +15,11 @@ export async function getSigner(network: string, privateKey: string)
 }
 
 //Gets the current block
-export async function getCurrentBlock() {
+export async function getCurrentBlock(): Promise<number> {
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
-    chain: process.env.ORIGIN_CHAIN_ID,
+    chain: originChainId,
   });
   const currentblock = currentblockresponse.result.block;
   return currentblock;

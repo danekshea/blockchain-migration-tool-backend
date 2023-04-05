@@ -1,13 +1,13 @@
 import { PrismaClient } from '@prisma/client'
 import { ImmutableX, Config } from '@imtbl/core-sdk';
-import { minting_batch_size, minting_batch_delay, minting_request_delay } from './config';
+import { mintingBatchSize, mintingBatchDelay, mintingRequestDelay, IPFS_CID, destinationChainId, destinationCollectionAddress } from './config';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import { getSigner, isIMXRegistered } from './utils';
 dotenv.config();
 
 //Load an array of mints from tokens that haven't been minted from the DB
-async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
+async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
   //Pull tokens that haven't been minted yet from the DB
   const burnTransfers = await prisma.burn.findMany({
     where: { minted: 0 },
@@ -20,13 +20,13 @@ async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
       if (tokensArray[burn.fromAddress]) {
         tokensArray[burn.fromAddress].push({
           id: burn.tokenId,
-          blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + burn.tokenId
+          blueprint: 'ipfs://' + IPFS_CID + '/' + burn.tokenId
         });
       }
       else {
         tokensArray[burn.fromAddress] = [{
           id: burn.tokenId,
-          blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + burn.tokenId
+          blueprint: 'ipfs://' + IPFS_CID + '/' + burn.tokenId
         }];
       }
     }
@@ -44,7 +44,7 @@ async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
           user: key.toLowerCase(),
           tokens: tokensArray[key]
         }],
-        contract_address: process.env.DESTINATION_COLLECTION_ADDRESS
+        contract_address: destinationCollectionAddress
       }
       index++;
     }
@@ -56,19 +56,19 @@ async function loadUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
 }
 
 //Batches the token mints and returns an array of mints
-async function batchMintArray(mintArray: any[]) {
+async function batchIMXMintArray(mintArray: any[]) {
   let batchifiedMintArray = [];
 
   for (const element of mintArray) {
-    if (element.users[0].tokens.length > minting_batch_size) {
+    if (element.users[0].tokens.length > mintingBatchSize) {
       console.log('Batching ' + element.users[0].tokens.length + ' tokens for ' + element.users[0].etherKey);
 
       //calculate the amount of batches
-      const batchcount = Math.floor(element.users[0].tokens.length / minting_batch_size);
+      const batchcount = Math.floor(element.users[0].tokens.length / mintingBatchSize);
       console.log('Batch count: ' + batchcount);
 
       //calculate the remainder after the batches have been created
-      const remainder = element.users[0].tokens.length % minting_batch_size;
+      const remainder = element.users[0].tokens.length % mintingBatchSize;
       console.log('Remainder: ' + remainder);
 
       //loop for the batches
@@ -80,11 +80,11 @@ async function batchMintArray(mintArray: any[]) {
 
         let j: number = 0
 
-        while (j < minting_batch_size) {
+        while (j < mintingBatchSize) {
           //Create the token array according to the batch size
           tokens[j] = {
             id: element.users[0].tokens[j + tokenindex].id,
-            blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + element.users[0].tokens[j + tokenindex].id,
+            blueprint: 'ipfs://' + IPFS_CID + '/' + element.users[0].tokens[j + tokenindex].id,
           };
           j++
         }
@@ -109,7 +109,7 @@ async function batchMintArray(mintArray: any[]) {
         while (k < remainder) {
           tokens[k] = {
             id: element.users[0].tokens[tokenindex + k].id,
-            blueprint: 'ipfs://' + process.env.IPFS_CID + '/' + (tokenindex + k).toString(),
+            blueprint: 'ipfs://' + IPFS_CID + '/' + (tokenindex + k).toString(),
           };
           k++;
         }
@@ -154,7 +154,7 @@ async function batchMintArray(mintArray: any[]) {
 }
 
 //Mints the batches of a mint array
-async function mintBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintArray: any[], network: string) {
+async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintArray: any[], network: string) {
   for (const element of mintArray) {
     const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
     console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
@@ -180,27 +180,26 @@ async function mintBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintA
     }
   }
   //Optional timeout to prevent rate limiting
-  await new Promise(r => setTimeout(r, minting_batch_delay));
+  await new Promise(r => setTimeout(r, mintingBatchDelay));
 }
 
 //Runs the minting function every 10 seconds
-async function runRegularMint(imxclient: ImmutableX, prisma: PrismaClient, network: string) {
+async function runIMXRegularMint(imxclient: ImmutableX, prisma: PrismaClient, network: string) {
   console.log("Checking for new mints...");
   //loads the mint array which is going to be passed to the minting function
-  const batchArray = await batchMintArray(await loadUserMintArray(imxclient, prisma));
-  mintBatchArray(imxclient, prisma, batchArray, network);
+  const batchArray = await batchIMXMintArray(await loadIMXUserMintArray(imxclient, prisma));
+  mintIMXBatchArray(imxclient, prisma, batchArray, network);
 
   //Delay before running again
-  await new Promise(r => setTimeout(r, minting_request_delay));
-  runRegularMint(imxclient, prisma, network);
+  await new Promise(r => setTimeout(r, mintingRequestDelay));
+  runIMXRegularMint(imxclient, prisma, network);
 }
 
-
-async function main() {
+async function IMXminter() {
   const prisma = new PrismaClient();
-  const config = (process.env.NETWORK == "mainnet") ? Config.PRODUCTION : Config.SANDBOX
+  const config = (destinationChainId === 5000) ? Config.PRODUCTION : Config.SANDBOX
   const imxclient = new ImmutableX(config);
-  runRegularMint(imxclient, prisma, process.env.NETWORK!);
+  runIMXRegularMint(imxclient, prisma, process.env.NETWORK!);
 }
 
-main();
+IMXminter();

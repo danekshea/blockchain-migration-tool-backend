@@ -3,14 +3,15 @@ import { EvmNftTransfer, EvmAddress } from '@moralisweb3/common-evm-utils';
 import { PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
 import { getCurrentBlock } from "./utils";
+import { burnAddress, originChainId, originCollectionAddress } from "./config";
 dotenv.config();
 
 //Retrieves the burn transfers from a certain block range and curses through them recursively
-async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], fromBlock: number, toBlock: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
+async function getEVMBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = [], fromBlock: number, toBlock: number, cursor?: string, index: number = 0, usedtokenids: string[] = []): Promise<EvmNftTransfer[]> {
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
-    chain: process.env.ORIGIN_CHAIN_ID,
+    chain: originChainId,
   });
   const currentblock = currentblockresponse.result.block;
 
@@ -36,8 +37,8 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
   //Get all transfers for a collection address and chain
   try {
     const response = await Moralis.EvmApi.nft.getNFTContractTransfers({
-      address: process.env.ORIGIN_COLLECTION_ADDRESS!,
-      chain: process.env.ORIGIN_CHAIN_ID,
+      address: originCollectionAddress,
+      chain: originChainId,
       fromBlock: fromBlock,
       toBlock: toBlock,
       cursor: cursor
@@ -49,9 +50,9 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
     //await new Promise(f => setTimeout(f, 500));
 
     //Iterate through and sort out the burn transfers and push them into an array, make sure no duplicate tokenIDs are loaded
-    const burnAddress = EvmAddress.create(process.env.BURN_ADDRESS!);
+    const burnEVMAddress = EvmAddress.create(burnAddress);
     for (const element of response.result) {
-      if (element.toAddress.lowercase == burnAddress.lowercase && !usedtokenids.includes(element.tokenId)) {
+      if (element.toAddress.lowercase == burnEVMAddress.lowercase && !usedtokenids.includes(element.tokenId)) {
         burnTransfers.push(element);
         usedtokenids.push(element.tokenId);
       }
@@ -64,7 +65,7 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
       console.log("Cursing through page " + (index + 1) + " of transfers in block range " + fromBlock + "-" + toBlock + "...");
       console.log(response.pagination);
       index++;
-      return await getBurnTransfersByBlockRange(burnTransfers, fromBlock, toBlock, response.pagination.cursor, index, usedtokenids);
+      return await getEVMBurnTransfersByBlockRange(burnTransfers, fromBlock, toBlock, response.pagination.cursor, index, usedtokenids);
     }
 
     console.log("Found " + burnTransfers.length + " burn transfers in block range")
@@ -74,13 +75,13 @@ async function getBurnTransfersByBlockRange(burnTransfers: EvmNftTransfer[] = []
     console.log(err);
     console.log("Errored out, retrying in 1 second...");
     await new Promise(f => setTimeout(f, 1000));
-    return await getBurnTransfersByBlockRange(burnTransfers, fromBlock, toBlock, cursor, index, usedtokenids);
+    return await getEVMBurnTransfersByBlockRange(burnTransfers, fromBlock, toBlock, cursor, index, usedtokenids);
   }
 
 }
 
 //Backfills burn transfers into the DB in the range defined at the block interval also defined, this is typically used for catching up rather than active monitoring
-async function backFillBurnTransfers(prisma: PrismaClient, fromBlock: number, toBlock: number, blockinterval: number) {
+async function backFillEVMBurnTransfers(prisma: PrismaClient, fromBlock: number, toBlock: number, blockinterval: number) {
   if ((toBlock - fromBlock) < blockinterval) {
     console.log("Block interval is larger than the block range, setting block interval to block range");
     blockinterval = toBlock - fromBlock;
@@ -97,9 +98,9 @@ async function backFillBurnTransfers(prisma: PrismaClient, fromBlock: number, to
       blockinterval = toBlock - indexblock;
     }
     console.log("Getting blocks in block range: " + indexblock + "-" + (indexblock + blockinterval));
-    const burnTransfers = await getBurnTransfersByBlockRange([], indexblock, indexblock + blockinterval);
+    const burnTransfers = await getEVMBurnTransfersByBlockRange([], indexblock, indexblock + blockinterval);
     if (burnTransfers.length > 0) {
-      await loadBurnTransfers(prisma, burnTransfers);
+      await loadEVMBurnTransfers(prisma, burnTransfers);
     }
     indexblock += blockinterval;
   }
@@ -108,7 +109,7 @@ async function backFillBurnTransfers(prisma: PrismaClient, fromBlock: number, to
 }
 
 //Loads the burn transfers into the database
-async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTransfer[]) {
+async function loadEVMBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTransfer[]) {
   console.log("Loading " + burnTransfers.length + " burn transfers into the database");
   for (const element of burnTransfers) {
     try {
@@ -135,32 +136,32 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: EvmNftTran
 }
 
 //Monitors looking forward from the last polled block at a specified interval
-async function monitorBurnTransfers(prisma: PrismaClient, last_polled_block: number, block_polling_interval: number) {
+async function monitorEVMBurnTransfers(prisma: PrismaClient, last_polled_block: number, block_polling_interval: number) {
   try {
     const todayDate = new Date();
     const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
       date: todayDate.toString(),
-      chain: process.env.ORIGIN_CHAIN_ID,
+      chain: originChainId,
     });
     const currentblock = currentblockresponse.result.block;
 
     if (currentblock - last_polled_block >= block_polling_interval) {
       console.log("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
-      await backFillBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
-      monitorBurnTransfers(prisma, currentblock, block_polling_interval);
+      await backFillEVMBurnTransfers(prisma, last_polled_block, currentblock, block_polling_interval);
+      monitorEVMBurnTransfers(prisma, currentblock, block_polling_interval);
     }
     else {
       console.log("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
       //Delay before checking again
       await new Promise(f => setTimeout(f, 1000));
-      monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
+      monitorEVMBurnTransfers(prisma, last_polled_block, block_polling_interval);
     }
   }
   catch (err) {
     console.log(err);
     console.log("Errored out, retrying in 1 second...");
     await new Promise(f => setTimeout(f, 1000));
-    monitorBurnTransfers(prisma, last_polled_block, block_polling_interval);
+    monitorEVMBurnTransfers(prisma, last_polled_block, block_polling_interval);
   }
 }
 
@@ -173,7 +174,7 @@ async function main() {
   
   const prisma = new PrismaClient();
   const currentBlock = await getCurrentBlock();
-  monitorBurnTransfers(prisma, currentBlock, 5);
+  monitorEVMBurnTransfers(prisma, currentBlock, 5);
 }
 
 main();

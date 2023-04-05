@@ -1,1 +1,16 @@
-[]
+[
+	{
+		"users": [
+			{
+				"user": "0x42c2d104c05a9889d79cdcd82f69d389ea24db9a",
+				"tokens": [
+					{
+						"id": "74",
+						"blueprint": "ipfs://bafybeihj3uuw24fioheuxkpupgnnxx44vdezzmo5fr7m6dv3dfjgawvcwy/74"
+					}
+				]
+			}
+		],
+		"contract_address": "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3"
+	}
+]
