@@ -6,8 +6,7 @@ import * as dotenv from 'dotenv';
 import { originChainId } from './config';
 dotenv.config();
 
-export async function getSigner(network: string, privateKey: string)
-  : Promise<Wallet> {
+export async function getSigner(network: string, privateKey: string):Promise<Wallet> {
       const provider = new ethers.providers.JsonRpcProvider((network == "mainnet") ? process.env.MAINNET_ETH_PROVIDER_URL : process.env.SANDBOX_ETH_PROVIDER_URL);
       const signer = new Wallet(privateKey).connect(provider)
       ethers.utils.verifyMessage
@@ -37,7 +36,7 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
   }
 }
 
-async function findDBMax(prisma: PrismaClient) {
+async function findDBMax(prisma: PrismaClient):Promise<[number, number]> {
   const results = await prisma.burn.findMany({
     orderBy: [
       {
@@ -45,6 +44,5 @@ async function findDBMax(prisma: PrismaClient) {
       }
     ]
   })
-  console.log("Max: " + results[0].blockNumber);
-  console.log("Min: " + results[results.length - 1].blockNumber);
+  return [parseInt(results[0].blockNumber), parseInt(results[results.length - 1].blockNumber)];
 }

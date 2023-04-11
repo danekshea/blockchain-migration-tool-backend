@@ -6,8 +6,8 @@ import * as fs from 'fs';
 import { getSigner, isIMXRegistered } from './utils';
 dotenv.config();
 
-//Load an array of mints from tokens that haven't been minted from the DB
-async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
+//Load an array of mints from tokens that haven't been minted, from the DB
+async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient)   {
   //Pull tokens that haven't been minted yet from the DB
   const burnTransfers = await prisma.burn.findMany({
     where: { minted: 0 },
@@ -17,6 +17,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient)
   let tokensArray: { [receiverAddress: string]: any[] } = {};
   for (const burn of burnTransfers) {
     if (burn.fromAddress) {
+      //If the user already exists in the array then add the token to the array, otherwise create a new key entry
       if (tokensArray[burn.fromAddress]) {
         tokensArray[burn.fromAddress].push({
           id: burn.tokenId,
