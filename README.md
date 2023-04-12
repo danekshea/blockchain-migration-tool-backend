@@ -13,6 +13,10 @@ The following EVM origin chains are supported:
 * Fantom
 * Polygon PoS
 
+# Pre-requisites
+* A deployed contract using the IMX base contracts
+* 
+
 ## Installation
 Install all the dependencies:
 ```bash
@@ -49,12 +53,8 @@ pm2 start npm --name "watcher" -- run watcher
 ```bash
 pm2 start npm --name "minter" -- run minter
 ```
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first
-to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
+# Things to note
+* 50k mints is the limit with an API key, contact Partner Success if you need to up this limit.
 
 ## Immediate to-do
 * Add error handling to checking if users are registered on IMX, currently the error handling doesn't account for rate limiting issues etc.

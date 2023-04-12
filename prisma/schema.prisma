@@ -14,11 +14,12 @@ model Burn {
   id    Int     @id @default(autoincrement())
   minted Int
   chain Int
-  blockNumber String
-  blockTimestamp DateTime
-  txHash String
+  blockNumber Int?
+  timestamp DateTime
+  transactionHash String?
+  transaction_id Int?
   tokenAddress String
-  tokenId String  @unique
+  tokenId Int  @unique
   fromAddress String?
   toAddress String
 }

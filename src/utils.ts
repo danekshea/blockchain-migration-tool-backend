@@ -4,6 +4,8 @@ import Moralis from "moralis";
 import { PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
 import { originChainId } from './config';
+import { EvmNftTransfer } from '@moralisweb3/common-evm-utils';
+import { burn } from './type';
 dotenv.config();
 
 export async function getSigner(network: string, privateKey: string):Promise<Wallet> {
@@ -14,11 +16,11 @@ export async function getSigner(network: string, privateKey: string):Promise<Wal
 }
 
 //Gets the current block
-export async function getCurrentBlock(): Promise<number> {
+export async function getCurrentBlock(chainId: number): Promise<number> {
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
-    chain: originChainId,
+    chain: chainId,
   });
   const currentblock = currentblockresponse.result.block;
   return currentblock;
@@ -36,13 +38,46 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
   }
 }
 
-async function findDBMax(prisma: PrismaClient):Promise<[number, number]> {
+async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
   const results = await prisma.burn.findMany({
+    where: {
+      blockNumber: {
+        not: null,
+      },
+    },
     orderBy: [
       {
         blockNumber: 'desc',
-      }
-    ]
-  })
-  return [parseInt(results[0].blockNumber), parseInt(results[results.length - 1].blockNumber)];
+      },
+    ],
+  });
+    if (results.length === 0) {
+      // Handle the case where no records were found
+      throw new Error('No records with non-null blockNumbers were found');
+    }
+  
+    return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
 }
+
+export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {
+  return {
+    chain: evmt.chain.decimal, // You might need to convert the chain value to a number if it isn't already
+    timestamp: evmt.blockTimestamp,
+    blockNumber: parseInt(evmt.blockNumber.toString()),
+    transactionHash: evmt.transactionHash,
+    tokenAddress: evmt.tokenAddress.lowercase, // You might need to convert the tokenAddress value to a string if it isn't already
+    tokenId: parseInt(evmt.tokenId),
+    fromAddress: evmt.fromAddress?.lowercase, // You might need to convert the fromAddress value to a string if it isn't already
+    toAddress: evmt.toAddress.lowercase, // You might need to convert the toAddress value to a string if it isn't already
+  };
+}
+
+export function convertEvmNftTransferToBurnList(evmtList: EvmNftTransfer[]): burn[] {
+  return evmtList.map(convertEvmNftTransferToBurn);
+}
+
+
+
+
+
+
