@@ -3,3 +3,6 @@ node_modules
 .env
 prisma/dev.db
 dev.db-journal
+.DS_Store
+.vscode/
+src/.DS_Store

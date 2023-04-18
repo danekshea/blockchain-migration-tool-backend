@@ -1,4 +1,4 @@
-import { ImmutableX } from '@imtbl/core-sdk';
+import { ImmutableX, Transfer } from '@imtbl/core-sdk';
 import { ethers, Wallet } from 'ethers';
 import Moralis from "moralis";
 import { PrismaClient } from '@prisma/client'
@@ -75,6 +75,26 @@ export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {
 export function convertEvmNftTransferToBurnList(evmtList: EvmNftTransfer[]): burn[] {
   return evmtList.map(convertEvmNftTransferToBurn);
 }
+
+export function convertIMXTransferToBurn(transfer: Transfer, chainId:number): burn {
+  if(transfer.token.data.token_address == null || transfer.token.data.token_id == null) throw new Error("Token address or token id is null");
+  return {
+    chain: chainId, // Assuming Ethereum as the chain; update accordingly
+    blockNumber: undefined, // Assuming no blockNumber available; update accordingly
+    timestamp: transfer.timestamp ? new Date(transfer.timestamp) : new Date(),
+    transactionHash: undefined, // Assuming no transactionHash available; update accordingly
+    transaction_id: transfer.transaction_id,
+    tokenAddress: transfer.token.data.token_address,
+    tokenId: parseInt(transfer.token.data.token_id),
+    fromAddress: transfer.user,
+    toAddress: transfer.receiver
+  };
+}
+
+export function convertIMXTransfersToBurns(transfers: Transfer[], chainId: number): burn[] {
+  return transfers.map(transfer => convertIMXTransferToBurn(transfer, chainId));
+}
+
 
 
 

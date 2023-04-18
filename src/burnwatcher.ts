@@ -2,9 +2,11 @@ import Moralis from "moralis";
 import { EvmNftTransfer, EvmAddress } from "@moralisweb3/common-evm-utils";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv-safe";
-import { getCurrentBlock, convertEvmNftTransferToBurnList } from "./utils";
-import { originChainId } from "./config";
+import { getCurrentBlock, convertEvmNftTransferToBurnList, convertIMXTransferToBurn, convertIMXTransfersToBurns } from "./utils";
 import { burn } from "./type";
+import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/core-sdk";
+import { error } from "console";
+import { ListTransfersResponse } from "@imtbl/core-sdk";
 dotenv.config();
 
 //Retrieves the burn transfers from a certain block range and curses through them recursively
@@ -204,7 +206,83 @@ async function monitorEVMBurnTransfers(
   }
 }
 
+async function getIMXBurnTransfers(
+  client:ImmutableX,
+  collectionAddress:string,
+  receiver:string,
+  cursor?:string,
+  maxTimestamp?:Date,
+  minTimestamp?:Date
+): Promise<ListTransfersResponse> {
+  console.log("Doing getIMXBurnTransferRequest, maxTimestamp: " + maxTimestamp?.toISOString() + ", minTimestamp: " + minTimestamp?.toISOString());
+  const transfers = await client.listTransfers({
+    direction: "asc",
+    tokenAddress: collectionAddress,
+    receiver: receiver,
+    pageSize: 200,
+    maxTimestamp: maxTimestamp?.toISOString(),
+    minTimestamp: minTimestamp?.toISOString(),
+    cursor: cursor,
+  });
+  return transfers;
+}
 
+async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, collectionAddress: string, receiver:string, maxDelay?:number, minDelay?:number) {
+  let transfersArray: Transfer[] = [];
+  let burns: burn[] = [];
+  let oldCursor = "";
+  let iterations:number = 0;
+
+  //If there's a delay then we need to create a max timestamp
+  let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
+  let minTimestamp = minDelay ? new Date(Date.now() - minDelay) : undefined;
+
+  //Create the initial request
+  let transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, undefined, maxTimestamp, minTimestamp);
+
+  while (true) {
+    //If there's no cursor left then we've reached the end and need to continue polling the endpoint with the old cursor until something new arrives
+    if (!transfers.cursor) {
+      console.log("No cursor...");
+      //console.log("Old cursor: " + oldCursor);
+      if(!oldCursor) {
+        console.log("No old cursor...");
+        let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
+        let minTimestamp = minDelay ? new Date(Date.now() - minDelay) : undefined;
+        transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, undefined, maxTimestamp, minTimestamp);
+      }
+      else {      
+        //If there's an old cursor then we need to continue polling with that
+        console.log("Old cursor, we're going to continue polling with that...");
+        let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
+        transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, oldCursor, maxTimestamp);
+      }
+    } 
+    //If there's a cursor then we need to add to our array and continue polling
+    else {
+    //console.log("Cursor: " + transfers.cursor);
+      console.log("Cursor... adding to array and continuing to crawl...");
+      transfersArray.push(...transfers.result);
+      //console.log(transfers.result);
+      let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
+      oldCursor = transfers.cursor;
+      transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, transfers.cursor, maxTimestamp);
+    }
+
+    //We need some sort of trigger to determine when we load the database, for now we're just going to load every 1000 transfers or every 10 iterations
+    if (transfersArray.length > 1000 || (iterations>10 && transfersArray.length>0)) {
+      burns = convertIMXTransfersToBurns(transfersArray, 5001);
+      loadBurnTransfers(prisma, burns);
+      transfersArray = [];
+      burns = [];
+      iterations = 0;
+    }
+    iterations++;
+
+    //Delay before checking again
+    await new Promise((f) => setTimeout(f, 3000));
+  }
+}
 
 //Loads the burn transfers into the database
 async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): Promise<boolean> {
@@ -238,26 +316,46 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): P
   }
 }
 
-//Starts an EVM watcher instance
+//Starts a watcher instance
 async function watcher(chainId: number, collectionAddress: string, burnAddress: string) {
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
   const prisma = new PrismaClient();
   if (chainId === 5000 || chainId === 5001) {
-    console.log("IMX watcher");
+    console.log("IMX watcher on chainId: " + chainId);
+    const config = chainId === 5000 ? Config.PRODUCTION : Config.SANDBOX;
+    const client = new ImmutableX(config);
+    //delayed one
+    //monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000);
+    monitorIMXBurnTransfers(client, prisma, collectionAddress, burnAddress, undefined, 60000);
+
   } else {
-    console.log("EVM watcher");
+    console.log("EVM watcher on chainId: " + chainId);
+    await Moralis.start({
+      apiKey: process.env.MORALIS_API_KEY,
+    });
     const currentBlock = await getCurrentBlock(chainId);
     const pollingInterval: number = 5;
     monitorEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, currentBlock, pollingInterval);
   }
 }
+
+//Test monitorIMXBurnTransfers
+// async function main() {
+//   const config = Config.SANDBOX;
+//   const client = new ImmutableX(config);
+//   const prisma = new PrismaClient();
+//   //monitorIMXBurnTransfers(client, prisma, "0xc1f1da534e227489d617cd742481fd5a23f6a003", "0x0000000000000000000000000000000000000000", fiveMinute, new Date("2023-04-13T06:06:35.478763Z"));
+//   //const transfers = await getIMXBurnTransfers(client, "0xc1f1da534e227489d617cd742481fd5a23f6a003", "0x0000000000000000000000000000000000000000");
+//   //console.log(transfers);
+//   monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000);
+//   monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000, 120000);
+// }
+// main();
+
+//Test the watcher function
+//Polygon mainnet
 watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
-
-//Just monitor from the current block forward
-
-//
+//IMX testnet
+//watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for getEVMBurnTransfersByBlockRange
 // async function main() {
