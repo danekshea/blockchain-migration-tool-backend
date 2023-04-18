@@ -62,6 +62,8 @@ pm2 start npm --name "minter" -- run minter
 ## Long-term to-do
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
 * Introduce types for the mint arrays etc.
+* Add auditing to StarkEx watcher because it might miss assets due to an ordering issue with the IMX APIs
+* Add support for other EVM NaaS providers than Moralis
 
 ## License
 
