@@ -1,10 +1,10 @@
 import { ImmutableX, Transfer } from '@imtbl/core-sdk';
 import { ethers, Wallet } from 'ethers';
 import Moralis from "moralis";
-import { PrismaClient } from '@prisma/client'
+import { Burn, PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
 import { originChainId } from './config';
-import { EvmNftTransfer } from '@moralisweb3/common-evm-utils';
+import { EvmNftTransfer, GetTransactionRequest, GetTransactionResponseAdapter } from '@moralisweb3/common-evm-utils';
 import { burn } from './type';
 dotenv.config();
 
@@ -94,6 +94,50 @@ export function convertIMXTransferToBurn(transfer: Transfer, chainId:number): bu
 export function convertIMXTransfersToBurns(transfers: Transfer[], chainId: number): burn[] {
   return transfers.map(transfer => convertIMXTransferToBurn(transfer, chainId));
 }
+
+export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Burn[]> {
+  try {
+    const burnTransfers = await prisma.burn.findMany({
+      where: { minted: 0 },
+    });
+    return burnTransfers;
+  } catch (error:any) {
+    console.error('Failed to fetch burn transfers from the database:', error.message);
+    return [];
+  }
+}
+
+export async function setBurnTransferToMinted(prisma: PrismaClient, burnTokenId:number): Promise<boolean> {
+  try {
+    await prisma.burn.update({
+      where: { id: burnTokenId },
+      data: { minted: 1 },
+    });
+    return true;
+  } catch (error:any) {
+    console.error('Failed to set burn transfer for ' + burnTokenId + " to minted:", error.message);
+    return false;
+  }
+}
+
+//The Moralis API getting a transaction should, according to them, be at least 1 confirmation
+export async function transactionConfirmation(txhash:string, chainId:number, pollingDelay:number): Promise<boolean> {
+  try {
+    const txrequest:GetTransactionRequest = {transactionHash: txhash, chain: chainId}
+    let tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
+    while (tx === null || tx.result === null) {
+      console.log("Waiting for transaction " + txrequest.transactionHash + " to be confirmed...");
+      await new Promise((r) => setTimeout(r, pollingDelay));
+      tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
+    }
+    return true;
+  } catch (error:any) {
+    console.error("Failed to fetch transaction details:", error.message);
+    throw new Error("Failed to fetch transaction details");
+  }
+}
+
+
 
 
 

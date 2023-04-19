@@ -15,7 +15,7 @@ The following EVM origin chains are supported:
 
 # Pre-requisites
 * A deployed contract using the IMX base contracts
-* 
+* A Moralis API key
 
 ## Installation
 Install all the dependencies:
