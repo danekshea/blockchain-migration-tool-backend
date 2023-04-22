@@ -9,27 +9,37 @@ import { burn } from './type';
 dotenv.config();
 
 export async function getSigner(network: string, privateKey: string):Promise<Wallet> {
-      const provider = new ethers.providers.JsonRpcProvider((network == "mainnet") ? process.env.MAINNET_ETH_PROVIDER_URL : process.env.SANDBOX_ETH_PROVIDER_URL);
-      const signer = new Wallet(privateKey).connect(provider)
-      ethers.utils.verifyMessage
-      return signer
+  if (!privateKey) throw new Error('Private key is required.');
+
+  const providerUrl = network === 'mainnet' ? process.env.MAINNET_ETH_PROVIDER_URL : process.env.SANDBOX_ETH_PROVIDER_URL;
+
+  if (!providerUrl) throw new Error('Provider URL not found.');
+
+  const provider = new ethers.providers.JsonRpcProvider(providerUrl);
+  const signer = new Wallet(privateKey).connect(provider);
+  return signer;
 }
 
 //Gets the current block
 export async function getCurrentBlock(chainId: number): Promise<number> {
-  const todayDate = new Date();
-  const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
-    date: todayDate.toString(),
-    chain: chainId,
-  });
-  const currentblock = currentblockresponse.result.block;
-  return currentblock;
+  try {
+    const todayDate = new Date();
+    const currentBlockResponse = await Moralis.EvmApi.block.getDateToBlock({
+      date: todayDate.toString(),
+      chain: chainId,
+    });
+    const currentBlock = currentBlockResponse.result.block;
+    return currentBlock;
+  } catch (error:any) {
+    console.error('Failed to fetch the current block:', error.message);
+    throw new Error('Failed to fetch the current block');
+  }
 }
 
 //Check if the user is registered onchain
 export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string): Promise<boolean> {
   try {
-    const isRegistered = await imxclient.getUser(ethaddress);
+    await imxclient.getUser(ethaddress);
     return true;
   }
   catch (err) {
@@ -39,24 +49,29 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
 }
 
 async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
-  const results = await prisma.burn.findMany({
-    where: {
-      blockNumber: {
-        not: null,
+  try {
+    const results = await prisma.burn.findMany({
+      where: {
+        blockNumber: {
+          not: null,
+        },
       },
-    },
-    orderBy: [
-      {
-        blockNumber: 'desc',
-      },
-    ],
-  });
+      orderBy: [
+        {
+          blockNumber: 'desc',
+        },
+      ],
+    });
+
     if (results.length === 0) {
-      // Handle the case where no records were found
       throw new Error('No records with non-null blockNumbers were found');
     }
-  
+
     return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
+  } catch (error:any) {
+    console.error('Failed to fetch block numbers:', error.message);
+    throw new Error('Failed to fetch block numbers');
+  }
 }
 
 export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {

@@ -1,11 +1,10 @@
 import Moralis from "moralis";
 import { EvmNftTransfer, EvmAddress } from "@moralisweb3/common-evm-utils";
 import { PrismaClient } from "@prisma/client";
-import * as dotenv from "dotenv-safe";
+import * as dotenv from "dotenv";
 import { getCurrentBlock, convertEvmNftTransferToBurnList, convertIMXTransferToBurn, convertIMXTransfersToBurns } from "./utils";
 import { burn } from "./type";
 import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/core-sdk";
-import { error } from "console";
 import { ListTransfersResponse } from "@imtbl/core-sdk";
 dotenv.config();
 
@@ -353,9 +352,9 @@ async function watcher(chainId: number, collectionAddress: string, burnAddress: 
 
 //Test the watcher function
 //Polygon mainnet
-watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
+//watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
 //IMX testnet
-//watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
+watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for getEVMBurnTransfersByBlockRange
 // async function main() {

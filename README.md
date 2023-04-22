@@ -58,6 +58,7 @@ pm2 start npm --name "minter" -- run minter
 
 ## Immediate to-do
 * Add error handling to checking if users are registered on IMX, currently the error handling doesn't account for rate limiting issues etc.
+* Add intelligent gas estimation to the EVM minting side
 
 ## Long-term to-do
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
