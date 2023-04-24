@@ -1,3 +1,5 @@
+import { MintUser } from "@imtbl/core-sdk";
+
 export interface burn {
     chain: number,
     blockNumber?: number,
@@ -10,6 +12,7 @@ export interface burn {
     toAddress: string
 }
 
-export interface mint {
-
+export interface MintRequestWithoutAuth {
+    users: MintUser[],
+    contract_address: string
 }

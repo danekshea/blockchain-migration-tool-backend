@@ -1,6 +1,6 @@
 import { Burn, PrismaClient } from "@prisma/client";
 import Moralis from "moralis";
-import { ImmutableX, Config } from "@imtbl/core-sdk";
+import { ImmutableX, Config, MintTokenDataV2, MintRequest, MintUser } from "@imtbl/core-sdk";
 import {
   IMXMintingBatchSize,
   IMXMintingBatchDelay,
@@ -21,10 +21,19 @@ import * as fs from "fs";
 import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setBurnTransferToMinted, transactionConfirmation } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
+import { MintRequestWithoutAuth } from "./type";
 dotenv.config();
 
 //Mint an EVM asset
-async function mintEVMAsset(signer: Signer, collectionAddress: string, to: string, tokenId: number, contractABI:string, EVMMintingGasPrice:number, EVMMintingGasLimit:number): Promise<string> {
+async function mintEVMAsset(
+  signer: Signer,
+  collectionAddress: string,
+  to: string,
+  tokenId: number,
+  contractABI: string,
+  EVMMintingGasPrice: number,
+  EVMMintingGasLimit: number
+): Promise<string> {
   try {
     const EVMMintingGasPriceParam = ethers.utils.parseUnits(EVMMintingGasPrice.toString(), "gwei");
 
@@ -45,13 +54,23 @@ async function mintEVMAsset(signer: Signer, collectionAddress: string, to: strin
 }
 
 //Mints a batch of EVM assets
-async function mintEVMAssets(prisma: PrismaClient, signer:Signer, burnTransfers:Burn[], chainId:number, collectionAddress:string, contractABI:string, transactionConfirmationPollingDelay:number, EVMMintingGasPrice:number, gasLimit:number) {
-  for(const burn of burnTransfers) {
+async function mintEVMAssets(
+  prisma: PrismaClient,
+  signer: Signer,
+  burnTransfers: Burn[],
+  chainId: number,
+  collectionAddress: string,
+  contractABI: string,
+  transactionConfirmationPollingDelay: number,
+  EVMMintingGasPrice: number,
+  gasLimit: number
+) {
+  for (const burn of burnTransfers) {
     try {
       if (burn.fromAddress) {
         const txhash = await mintEVMAsset(signer, collectionAddress, burn.fromAddress, burn.tokenId, contractABI, EVMMintingGasPrice, gasLimit);
         console.log(txhash);
-        
+
         //Create a loop that waits for the asset to be in the Moralis API
         await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
 
@@ -65,34 +84,64 @@ async function mintEVMAssets(prisma: PrismaClient, signer:Signer, burnTransfers:
   }
 }
 
-async function runEVMRegularMint(prisma: PrismaClient, signer:Signer, chainId:number, collectionAddress:string, contractABI:string, EVMMintingRequestDelay:number, transactionConfirmationPollingDelay:number, EVMMintingGasPrice:number, gasLimit:number) {
+async function runEVMRegularMint(
+  prisma: PrismaClient,
+  signer: Signer,
+  chainId: number,
+  collectionAddress: string,
+  contractABI: string,
+  EVMMintingRequestDelay: number,
+  transactionConfirmationPollingDelay: number,
+  EVMMintingGasPrice: number,
+  gasLimit: number
+) {
   console.log(`Checking for new EVM mints on chain ${chainId}...`);
   const burnTransfers = await getBurnTransfersFromDB(prisma);
-  await mintEVMAssets(prisma, signer, burnTransfers, chainId, collectionAddress, contractABI, transactionConfirmationPollingDelay, EVMMintingGasPrice, gasLimit);
+  await mintEVMAssets(
+    prisma,
+    signer,
+    burnTransfers,
+    chainId,
+    collectionAddress,
+    contractABI,
+    transactionConfirmationPollingDelay,
+    EVMMintingGasPrice,
+    gasLimit
+  );
 
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  runEVMRegularMint(prisma, signer, chainId, collectionAddress, contractABI, EVMMintingRequestDelay, transactionConfirmationPollingDelay, EVMMintingGasPrice, gasLimit);
+  runEVMRegularMint(
+    prisma,
+    signer,
+    chainId,
+    collectionAddress,
+    contractABI,
+    EVMMintingRequestDelay,
+    transactionConfirmationPollingDelay,
+    EVMMintingGasPrice,
+    gasLimit
+  );
 }
 
 //Load an array of mints from tokens that haven't been minted, from the DB
-async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient) {
+async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient, collectionAddress: string): Promise<MintRequestWithoutAuth[]> {
   //Pull tokens that haven't been minted yet from the DB
   const burnTransfers = await getBurnTransfersFromDB(prisma);
 
   //Go through each token and add an entry for each user or add to an additional user entry, mint requests are broken down by user
-  let tokensArray: { [receiverAddress: string]: any[] } = {};
+  let tokensArray: { [receiverAddress: string]: MintTokenDataV2[] } = {};
   for (const burn of burnTransfers) {
     if (burn.fromAddress) {
       //If the user already exists in the array then add the token to the array, otherwise create a new key entry
       if (tokensArray[burn.fromAddress]) {
         tokensArray[burn.fromAddress].push({
-          id: burn.tokenId,
+          id: burn.tokenId.toString(),
           blueprint: "ipfs://" + IPFS_CID + "/" + burn.tokenId,
         });
       } else {
         tokensArray[burn.fromAddress] = [
           {
-            id: burn.tokenId,
+            id: burn.tokenId.toString(),
             blueprint: "ipfs://" + IPFS_CID + "/" + burn.tokenId,
           },
         ];
@@ -100,7 +149,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient)
     }
   }
 
-  let mintArray = [];
+  let mintArray: MintRequestWithoutAuth[] = [];
   let index = 0;
   for (let key in tokensArray) {
     //Check if the user is registered on IMX
@@ -114,7 +163,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient)
             tokens: tokensArray[key],
           },
         ],
-        contract_address: destinationCollectionAddress,
+        contract_address: collectionAddress,
       };
       index++;
     } else {
@@ -125,12 +174,12 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient)
 }
 
 //Batches the token mints and returns an array of mints
-async function batchIMXMintArray(mintArray: any[]) {
-  let batchifiedMintArray = [];
+async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[]) {
+  let batchifiedMintArray: MintRequestWithoutAuth[] = [];
 
   for (const element of mintArray) {
     if (element.users[0].tokens.length > IMXMintingBatchSize) {
-      console.log("Batching " + element.users[0].tokens.length + " tokens for " + element.users[0].etherKey);
+      console.log("Batching " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
 
       //calculate the amount of batches
       const batchcount = Math.floor(element.users[0].tokens.length / IMXMintingBatchSize);
@@ -144,7 +193,7 @@ async function batchIMXMintArray(mintArray: any[]) {
       let i: number = 0;
       let tokenindex: number = 0;
       while (i < batchcount) {
-        let tokens = [];
+        let tokens: MintTokenDataV2[] = [];
 
         let j: number = 0;
 
@@ -161,18 +210,18 @@ async function batchIMXMintArray(mintArray: any[]) {
         batchifiedMintArray.push({
           users: [
             {
-              etherKey: element.users[0].etherKey,
+              user: element.users[0].user,
               tokens: tokens,
             },
           ],
-          contractAddress: element.contractAddress,
+          contract_address: element.contract_address,
         });
         i++;
       }
 
       if (remainder != 0) {
         //console.log('tokenid after batches complete: ' + tokenid);
-        let tokens = [];
+        let tokens: MintTokenDataV2[] = [];
 
         //Create the last remainder tokens which didn't get included in a batch
         let k: number = 0;
@@ -186,11 +235,11 @@ async function batchIMXMintArray(mintArray: any[]) {
         batchifiedMintArray.push({
           users: [
             {
-              etherKey: element.users[0].etherKey,
+              user: element.users[0].user,
               tokens: tokens,
             },
           ],
-          contractAddress: element.contractAddress,
+          contract_address: element.contract_address,
         });
       }
     } else {
@@ -254,25 +303,30 @@ async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mi
 }
 
 //Runs the minting function every 10 seconds
-async function runIMXRegularMint(imxclient: ImmutableX, prisma: PrismaClient, EVMMintingRequestDelay:number, network: string) {
+async function runIMXRegularMint(
+  imxclient: ImmutableX,
+  prisma: PrismaClient,
+  collectionAddress: string,
+  EVMMintingRequestDelay: number,
+  network: string
+) {
   console.log("Checking for new IMX StarkEx mints...");
   //loads the mint array which is going to be passed to the minting function
-  const batchArray = await batchIMXMintArray(await loadIMXUserMintArray(imxclient, prisma));
+  const batchArray = await batchIMXMintArray(await loadIMXUserMintArray(imxclient, prisma, collectionAddress));
   mintIMXBatchArray(imxclient, prisma, batchArray, network);
 
   //Delay before running again
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  runIMXRegularMint(imxclient, prisma, EVMMintingRequestDelay, network);
+  runIMXRegularMint(imxclient, prisma, collectionAddress, EVMMintingRequestDelay, network);
 }
 
 async function minter(chainId: number, collectionAddress: string) {
   const prisma = new PrismaClient();
-  if(chainId === 5000 || chainId === 5001) {
+  if (chainId === 5000 || chainId === 5001) {
     const config = destinationChainId === 5000 ? Config.PRODUCTION : Config.SANDBOX;
     const imxclient = new ImmutableX(config);
-    runIMXRegularMint(imxclient, prisma, IMXMintingRequestDelay, process.env.NETWORK!);
-  }
-  else {
+    runIMXRegularMint(imxclient, prisma, collectionAddress, IMXMintingRequestDelay, process.env.NETWORK!);
+  } else {
     //setup Moralis
     await Moralis.start({
       apiKey: process.env.MORALIS_API_KEY,
@@ -280,8 +334,28 @@ async function minter(chainId: number, collectionAddress: string) {
     const wallet = new ethers.Wallet(process.env.MINTER_PRIVATE_KEY!);
     const provider = new ethers.providers.JsonRpcProvider(process.env.EVM_PROVIDER_URL!);
     const signer = wallet.connect(provider);
-    runEVMRegularMint(prisma, signer, chainId, collectionAddress, contractABI, transactionConfirmationPollingDelay, EVMMintingRequestDelay, EVMMintingGasPrice, EVMMintingGasLimit);
+    runEVMRegularMint(
+      prisma,
+      signer,
+      chainId,
+      collectionAddress,
+      contractABI,
+      transactionConfirmationPollingDelay,
+      EVMMintingRequestDelay,
+      EVMMintingGasPrice,
+      EVMMintingGasLimit
+    );
   }
 }
 
-minter(137, originCollectionAddress);
+//minter(137, originCollectionAddress);
+
+//Test loadIMXUserMintArray
+async function main() {
+  const config = Config.SANDBOX;
+  const imxclient = new ImmutableX(config);
+  const prisma = new PrismaClient();
+  const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
+  console.log(JSON.stringify(mintArray, null, 2));
+}
+main();
