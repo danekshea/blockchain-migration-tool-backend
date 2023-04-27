@@ -125,7 +125,7 @@ export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Burn
 export async function setBurnTransferToMinted(prisma: PrismaClient, burnTokenId:number): Promise<boolean> {
   try {
     await prisma.burn.update({
-      where: { id: burnTokenId },
+      where: { tokenId: burnTokenId },
       data: { minted: 1 },
     });
     return true;

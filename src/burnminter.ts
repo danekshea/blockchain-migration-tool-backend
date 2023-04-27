@@ -174,7 +174,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
 }
 
 //Batches the token mints and returns an array of mints
-async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[]) {
+async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMintingBatchSize:number): Promise<MintRequestWithoutAuth[]> {
   let batchifiedMintArray: MintRequestWithoutAuth[] = [];
 
   for (const element of mintArray) {
@@ -245,51 +245,21 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[]) {
     } else {
       batchifiedMintArray.push(element);
     }
-    console.log(element.users[0].tokens.length);
-    //console.log(element[0][1]);
-    //console.log(element[0][1].length);
   }
   console.log("Length of original: " + mintArray.length);
   console.log("Length of batchified version: " + batchifiedMintArray.length);
 
-  //Write everything to file
-  fs.writeFile("src/testing/mintArray.json", JSON.stringify(mintArray, null, "\t"), (err) => {
-    if (err) {
-      console.error(err);
-    } else {
-      console.log("Mint array written to data/mintArray.json");
-    }
-  });
-
-  //Write everything to file
-  fs.writeFile("src/testing/batchifiedMintArray.json", JSON.stringify(batchifiedMintArray, null, "\t"), (err) => {
-    if (err) {
-      console.error(err);
-    } else {
-      console.log("Batchified mint array written to data/batchifiedMintArray.json");
-    }
-  });
-
-  return mintArray;
+  return batchifiedMintArray;
 }
 
 //Mints the batches of a mint array
-async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mintArray: any[], network: string) {
+async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, signer:Signer, mintArray: MintRequestWithoutAuth[], IMXMintingBatchDelay:number) {
   for (const element of mintArray) {
-    const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
     console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
       const result = await imxclient.mint(signer, element);
       for (const user of element.users[0].tokens) {
-        const updatetoken = await prisma.burn.update({
-          where: {
-            tokenId: user.id,
-          },
-          data: {
-            minted: 1,
-          },
-        });
-        console.log(user.id);
+        await setBurnTransferToMinted(prisma, parseInt(user.id));
       }
       console.log(result);
       return result;
@@ -306,26 +276,36 @@ async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, mi
 async function runIMXRegularMint(
   imxclient: ImmutableX,
   prisma: PrismaClient,
+  signer: Signer,
+  chainId: number,
   collectionAddress: string,
-  EVMMintingRequestDelay: number,
-  network: string
+  IMXMintingBatchSize: number,
+  IMXMintingRequestDelay: number
 ) {
-  console.log("Checking for new IMX StarkEx mints...");
+  console.log(`Checking for new IMX StarkEx mints on chain ${chainId}...`);
   //loads the mint array which is going to be passed to the minting function
-  const batchArray = await batchIMXMintArray(await loadIMXUserMintArray(imxclient, prisma, collectionAddress));
-  mintIMXBatchArray(imxclient, prisma, batchArray, network);
-
+  const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
+  
+  if(mintArray.length > 0) {
+    const batchArray = await batchIMXMintArray(mintArray, IMXMintingBatchSize);
+    await mintIMXBatchArray(imxclient, prisma, signer, batchArray, IMXMintingBatchDelay);
+  }
+  
   //Delay before running again
-  await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  runIMXRegularMint(imxclient, prisma, collectionAddress, EVMMintingRequestDelay, network);
+  //Delay before running again
+  setTimeout(() => {
+    runIMXRegularMint(imxclient, prisma, signer, chainId, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
+  }, IMXMintingRequestDelay);
 }
 
 async function minter(chainId: number, collectionAddress: string) {
   const prisma = new PrismaClient();
   if (chainId === 5000 || chainId === 5001) {
     const config = destinationChainId === 5000 ? Config.PRODUCTION : Config.SANDBOX;
+    const network = destinationChainId === 5000 ? "production" : "sandbox";
     const imxclient = new ImmutableX(config);
-    runIMXRegularMint(imxclient, prisma, collectionAddress, IMXMintingRequestDelay, process.env.NETWORK!);
+    const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
+    runIMXRegularMint(imxclient, prisma, signer, chainId, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
   } else {
     //setup Moralis
     await Moralis.start({
@@ -348,14 +328,73 @@ async function minter(chainId: number, collectionAddress: string) {
   }
 }
 
+//IMX testnet
+minter(5001, destinationCollectionAddress);
+
+//Polygon mainnet
 //minter(137, originCollectionAddress);
 
 //Test loadIMXUserMintArray
-async function main() {
-  const config = Config.SANDBOX;
-  const imxclient = new ImmutableX(config);
-  const prisma = new PrismaClient();
-  const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
-  console.log(JSON.stringify(mintArray, null, 2));
-}
-main();
+// async function loadIMXUserMintArrayTest() {
+//   const config = Config.SANDBOX;
+//   const imxclient = new ImmutableX(config);
+//   const prisma = new PrismaClient();
+//   const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
+//   console.log(JSON.stringify(mintArray, null, 2));
+
+//   //optional write to file
+//   // fs.writeFile("src/testing/mintArray.json", JSON.stringify(mintArray, null, "\t"), (err) => {
+//   //   if (err) {
+//   //     console.error(err);
+//   //   } else {
+//   //     console.log("Mint array written to data/mintArray.json");
+//   //   }
+//   // });
+// }
+// loadIMXUserMintArrayTest();
+
+// async function testBatchIMXMintArray() {
+//   const config = Config.SANDBOX;
+//   const imxclient = new ImmutableX(config);
+//   const prisma = new PrismaClient();
+//   const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
+
+//   const batchifiedMintArray = await batchIMXMintArray(mintArray, 3);
+
+//   console.log(JSON.stringify(mintArray, null, 2));
+//   console.log(JSON.stringify(batchifiedMintArray, null, 2));
+
+//   // //Optional write to file
+//   // fs.writeFile("src/testing/batchifiedMintArray.json", JSON.stringify(batchifiedMintArray, null, "\t"), (err) => {
+//   //   if (err) {
+//   //     console.error(err);
+//   //   } else {
+//   //     console.log("Batchified mint array written to data/batchifiedMintArray.json");
+//   //   }
+//   // });
+// }
+// testBatchIMXMintArray();
+
+// async function testMintIMXBatchArray() {
+//   const config = Config.SANDBOX;
+//   const imxclient = new ImmutableX(config);
+//   const prisma = new PrismaClient();
+//   const signer = await getSigner("sandbox", process.env.MINTER_PRIVATE_KEY!);
+
+//   const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
+
+//   const batchifiedMintArray = await batchIMXMintArray(mintArray, 10);
+
+//   await mintIMXBatchArray(imxclient, prisma, signer, batchifiedMintArray, 200);
+
+//   // //Optional write to file
+//   // fs.writeFile("src/testing/batchifiedMintArray.json", JSON.stringify(batchifiedMintArray, null, "\t"), (err) => {
+//   //   if (err) {
+//   //     console.error(err);
+//   //   } else {
+//   //     console.log("Batchified mint array written to data/batchifiedMintArray.json");
+//   //   }
+//   // });
+// }
+// testMintIMXBatchArray();
+
