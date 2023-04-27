@@ -1,4 +1,4 @@
-import { MintUser } from "@imtbl/core-sdk";
+import { MintTokensResponse, MintUser } from "@imtbl/core-sdk";
 
 export interface burn {
     chain: number,
@@ -16,3 +16,9 @@ export interface MintRequestWithoutAuth {
     users: MintUser[],
     contract_address: string
 }
+
+interface MintResult {
+    status: 'success' | 'error';
+    result?: MintTokensResponse;
+    errorMessage?: string;
+  }

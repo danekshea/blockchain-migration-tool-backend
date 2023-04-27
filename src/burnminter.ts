@@ -1,6 +1,6 @@
 import { Burn, PrismaClient } from "@prisma/client";
 import Moralis from "moralis";
-import { ImmutableX, Config, MintTokenDataV2, MintRequest, MintUser } from "@imtbl/core-sdk";
+import { ImmutableX, Config, MintTokenDataV2, MintRequest, MintUser, MintTokensResponse, IMXError } from "@imtbl/core-sdk";
 import {
   IMXMintingBatchSize,
   IMXMintingBatchDelay,
@@ -21,7 +21,7 @@ import * as fs from "fs";
 import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setBurnTransferToMinted, transactionConfirmation } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
-import { MintRequestWithoutAuth } from "./type";
+import { MintRequestWithoutAuth, MintResult } from "./type";
 dotenv.config();
 
 //Mint an EVM asset
@@ -252,8 +252,13 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
   return batchifiedMintArray;
 }
 
-//Mints the batches of a mint array
-async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, signer:Signer, mintArray: MintRequestWithoutAuth[], IMXMintingBatchDelay:number) {
+async function mintIMXBatchArray(
+  imxclient: ImmutableX,
+  prisma: PrismaClient,
+  signer: Signer,
+  mintArray: MintRequestWithoutAuth[],
+  IMXMintingBatchDelay: number
+): Promise<MintResult> {
   for (const element of mintArray) {
     console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
@@ -262,14 +267,25 @@ async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, si
         await setBurnTransferToMinted(prisma, parseInt(user.id));
       }
       console.log(result);
-      return result;
+      return { status: 'success', result };
     } catch (error) {
       console.log("Error minting tokens for " + element.users[0].user);
       console.log(error);
+      if (error instanceof Error) {
+        console.log(error);
+        return { status: 'error', errorMessage: error.message };
+      } else {
+        console.log("An unknown error occurred.");
+        return { status: 'error', errorMessage: 'An unknown error occurred during minting.' };
+      }
+    } finally {
+      // Optional timeout to prevent rate limiting
+      await new Promise((r) => setTimeout(r, IMXMintingBatchDelay));
     }
   }
-  //Optional timeout to prevent rate limiting
-  await new Promise((r) => setTimeout(r, IMXMintingBatchDelay));
+
+  // Return an error status if no minting attempt was made (e.g., empty mintArray)
+  return { status: 'error', errorMessage: 'No minting attempts were made.' };
 }
 
 //Runs the minting function every 10 seconds
