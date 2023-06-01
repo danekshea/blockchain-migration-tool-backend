@@ -15,6 +15,7 @@ import {
   EVMMintingGasLimit,
   transactionConfirmationPollingDelay,
   EVMMintingRequestDelay,
+  tokenIDOffset,
 } from "./config";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
@@ -68,17 +69,25 @@ async function mintEVMAssets(
   for (const burn of burnTransfers) {
     try {
       if (burn.fromAddress) {
-        const txhash = await mintEVMAsset(signer, collectionAddress, burn.fromAddress, burn.tokenId, contractABI, EVMMintingGasPrice, gasLimit);
+        const txhash = await mintEVMAsset(
+          signer,
+          collectionAddress,
+          burn.fromAddress,
+          burn.tokenId + tokenIDOffset,
+          contractABI,
+          EVMMintingGasPrice,
+          gasLimit
+        );
         console.log(txhash);
 
         //Create a loop that waits for the asset to be in the Moralis API
         await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
 
         //Set the database entry to minted
-        setBurnTransferToMinted(prisma, burn.id);
+        setBurnTransferToMinted(prisma, burn.id+tokenIDOffset);
       }
     } catch (error) {
-      console.error(`Error while minting EVM asset for tokenId ${burn.tokenId}:`, error);
+      console.error(`Error while minting EVM asset for tokenId ${burn.tokenId + tokenIDOffset}:`, error);
       // Optionally, you can decide how to handle the error (e.g., skip the current iteration, retry, etc.)
     }
   }
@@ -135,14 +144,14 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
       //If the user already exists in the array then add the token to the array, otherwise create a new key entry
       if (tokensArray[burn.fromAddress]) {
         tokensArray[burn.fromAddress].push({
-          id: burn.tokenId.toString(),
-          blueprint: "ipfs://" + IPFS_CID + "/" + burn.tokenId,
+          id: (burn.tokenId + tokenIDOffset).toString(),
+          blueprint: "ipfs://" + IPFS_CID + "/" + (burn.tokenId + tokenIDOffset),
         });
       } else {
         tokensArray[burn.fromAddress] = [
           {
-            id: burn.tokenId.toString(),
-            blueprint: "ipfs://" + IPFS_CID + "/" + burn.tokenId,
+            id: (burn.tokenId + tokenIDOffset).toString(),
+            blueprint: "ipfs://" + IPFS_CID + "/" + (burn.tokenId + tokenIDOffset),
           },
         ];
       }
@@ -174,7 +183,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
 }
 
 //Batches the token mints and returns an array of mints
-async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMintingBatchSize:number): Promise<MintRequestWithoutAuth[]> {
+async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMintingBatchSize: number): Promise<MintRequestWithoutAuth[]> {
   let batchifiedMintArray: MintRequestWithoutAuth[] = [];
 
   for (const element of mintArray) {
@@ -199,10 +208,7 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
 
         while (j < IMXMintingBatchSize) {
           //Create the token array according to the batch size
-          tokens[j] = {
-            id: element.users[0].tokens[j + tokenindex].id,
-            blueprint: "ipfs://" + IPFS_CID + "/" + element.users[0].tokens[j + tokenindex].id,
-          };
+          tokens[j] = element.users[0].tokens[j + tokenindex];
           j++;
         }
         tokenindex = tokenindex + j;
@@ -226,10 +232,7 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
         //Create the last remainder tokens which didn't get included in a batch
         let k: number = 0;
         while (k < remainder) {
-          tokens[k] = {
-            id: element.users[0].tokens[tokenindex + k].id,
-            blueprint: "ipfs://" + IPFS_CID + "/" + (tokenindex + k).toString(),
-          };
+          tokens[k] = element.users[0].tokens[tokenindex + k];
           k++;
         }
         batchifiedMintArray.push({
@@ -264,19 +267,19 @@ async function mintIMXBatchArray(
     try {
       const result = await imxclient.mint(signer, element);
       for (const user of element.users[0].tokens) {
-        await setBurnTransferToMinted(prisma, parseInt(user.id));
+        await setBurnTransferToMinted(prisma, parseInt(user.id)-tokenIDOffset);
       }
       console.log(result);
-      return { status: 'success', result };
+      return { status: "success", result };
     } catch (error) {
       console.log("Error minting tokens for " + element.users[0].user);
       console.log(error);
       if (error instanceof Error) {
         console.log(error);
-        return { status: 'error', errorMessage: error.message };
+        return { status: "error", errorMessage: error.message };
       } else {
         console.log("An unknown error occurred.");
-        return { status: 'error', errorMessage: 'An unknown error occurred during minting.' };
+        return { status: "error", errorMessage: "An unknown error occurred during minting." };
       }
     } finally {
       // Optional timeout to prevent rate limiting
@@ -285,7 +288,7 @@ async function mintIMXBatchArray(
   }
 
   // Return an error status if no minting attempt was made (e.g., empty mintArray)
-  return { status: 'error', errorMessage: 'No minting attempts were made.' };
+  return { status: "error", errorMessage: "No minting attempts were made." };
 }
 
 //Runs the minting function every 10 seconds
@@ -301,12 +304,12 @@ async function runIMXRegularMint(
   console.log(`Checking for new IMX StarkEx mints on chain ${chainId}...`);
   //loads the mint array which is going to be passed to the minting function
   const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
-  
-  if(mintArray.length > 0) {
+
+  if (mintArray.length > 0) {
     const batchArray = await batchIMXMintArray(mintArray, IMXMintingBatchSize);
     await mintIMXBatchArray(imxclient, prisma, signer, batchArray, IMXMintingBatchDelay);
   }
-  
+
   //Delay before running again
   //Delay before running again
   setTimeout(() => {
@@ -345,7 +348,10 @@ async function minter(chainId: number, collectionAddress: string) {
 }
 
 //IMX testnet
-minter(5001, destinationCollectionAddress);
+minter(destinationChainId, destinationCollectionAddress);
+
+//IMX testnet
+//minter(5001, destinationCollectionAddress);
 
 //Polygon mainnet
 //minter(137, originCollectionAddress);
@@ -413,4 +419,3 @@ minter(5001, destinationCollectionAddress);
 //   // });
 // }
 // testMintIMXBatchArray();
-

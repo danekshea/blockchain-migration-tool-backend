@@ -9,6 +9,7 @@ The following EVM origin chains are supported:
 * Arbitrum
 * Avalanche C-chain
 * BNB
+* Cronos
 * ETH L1
 * Fantom
 * Polygon PoS
@@ -57,9 +58,11 @@ pm2 start npm --name "minter" -- run minter
 ```
 # Things to note
 * 50k mints is the limit with an API key, contact Partner Success if you need to up this limit.
+* There's the ability to offset the tokenIDs in the case that you don't want to mint tokenID:tokenID, be wary fo using this parameter and make sure you don't have collisions etc.
 
 ## Immediate to-do
 * Add intelligent gas estimation to the EVM minting side
+* More thorough testing of token offset parameter
 
 ## Long-term to-do
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
@@ -67,5 +70,3 @@ pm2 start npm --name "minter" -- run minter
 * Add support for other EVM NaaS providers than Moralis
 
 ## License
-
-Not sure yet.
