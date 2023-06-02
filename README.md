@@ -1,18 +1,26 @@
 # Introduction
 
-The backend of a migration tool that migrates ERC721 tokens from any Moralis-supported EVM L1 to IMX's StarkEx instance.
+The backend of a migration tool that migrates ERC721 tokens between EVM chains and StarkEx instances. The tool supports the following migration paths:
+* (zk)EVM->StarkEx
+* Stark->(zk)EVM
+* (zk)EVM->(zk)EVM
 
 The watcher will watch for burns on the origin chain and load them into the database via Prisma.
 The minter will watch the DB for tokens that don't have the minted attribute.
 
-The following EVM origin chains are supported:
+The following EVM origin/destination chains are supported:
 * Arbitrum
 * Avalanche C-chain
 * BNB
 * Cronos
 * ETH L1
 * Fantom
+* Immutable zkEVM(coming soon)
 * Polygon PoS
+
+The following StarkEx origin/destination chains are supported:
+* Immutable X Mainnet
+* Immutable X Sandbox
 
 # Pre-requisites
 * A deployed contract using the IMX base contracts
