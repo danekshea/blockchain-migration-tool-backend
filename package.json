@@ -14,21 +14,21 @@
     "@moralisweb3/common-evm-utils": "^2.18.1",
     "@prisma/client": "^4.6.1",
     "dotenv": "^16.0.3",
-    "dotenv-safe": "^8.2.0",
     "ethers": "^5.7.2",
-    "moralis": "^2.18.1"
+    "moralis": "^2.18.1",
+    "winston": "^3.9.0",
+    "winston-daily-rotate-file": "^4.7.1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danekshea/blockchain-migration-tool.git"
+    "url": "git+https://github.com/danekshea/blockchain-migration-tool-backend.git"
   },
   "bugs": {
-    "url": "https://github.com/danekshea/blockchain-migration-tool/issues"
+    "url": "https://github.com/danekshea/blockchain-migration-tool-backend/issues"
   },
-  "homepage": "https://github.com/danekshea/blockchain-migration-tool#readme",
+  "homepage": "https://github.com/danekshea/blockchain-migration-tool-backend#readme",
   "description": "",
   "devDependencies": {
-    "@types/dotenv-safe": "^8.1.2",
     "@types/node": "^18.11.9",
     "prisma": "^4.6.1",
     "ts-node": "^10.9.1"

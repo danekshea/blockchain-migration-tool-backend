@@ -44,3 +44,6 @@ export const EVMMintingGasPrice:number = 280;
 
 //Gas limit for mints on EVM chains
 export const EVMMintingGasLimit:number = 146000;
+
+//Enable logging to file
+export const enableFileLogging:boolean = true;

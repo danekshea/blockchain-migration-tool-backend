@@ -7,6 +7,7 @@ import { burn } from "./type";
 import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/core-sdk";
 import { ListTransfersResponse } from "@imtbl/core-sdk";
 import { burnAddress, originChainId, originCollectionAddress } from "./config";
+import logger from "./logger";
 dotenv.config();
 
 //Retrieves the burn transfers from a certain block range and curses through them recursively
@@ -30,19 +31,19 @@ async function getEVMBurnTransfersByBlockRange(
 
   //Check to make sure the user has put a block number that's not higher than the current block
   if (toBlock > currentblock) {
-    console.log("Trying to get a block higher than the current block, setting to current block");
+    logger.info("Trying to get a block higher than the current block, setting to current block");
     toBlock = currentblock;
   }
 
   //Check to make sure the fromBlock is less than the toBlock
   if (fromBlock > toBlock) {
-    console.log("Trying to get a fromBlock higher than the toBlock, setting fromBlock to 1");
+    logger.info("Trying to get a fromBlock higher than the toBlock, setting fromBlock to 1");
     fromBlock = 1;
   }
 
   //Moralis doesn't allow requests for more than 1m blocks at a time
   if (toBlock - fromBlock > 1000000) {
-    console.log("Moralis API doesn't allow more than 1 million blocks in a request, setting toBlock to " + fromBlock + 1000000);
+    logger.info("Moralis API doesn't allow more than 1 million blocks in a request, setting toBlock to " + fromBlock + 1000000);
     toBlock = fromBlock + 1000000;
   }
 
@@ -74,8 +75,8 @@ async function getEVMBurnTransfersByBlockRange(
     //If index is included, it's because you want to limit the requests while testing
     //if (response.pagination && index < 5) {
     if (response.pagination.cursor != null) {
-      console.log("Cursing through page " + (index + 1) + " of transfers in block range " + fromBlock + "-" + toBlock + "...");
-      console.log(response.pagination);
+      logger.info("Cursing through page " + (index + 1) + " of transfers in block range " + fromBlock + "-" + toBlock + "...");
+      logger.info(response.pagination);
       index++;
       return await getEVMBurnTransfersByBlockRange(
         burnTransfers,
@@ -90,11 +91,11 @@ async function getEVMBurnTransfersByBlockRange(
       );
     }
 
-    console.log("Found " + burnTransfers.length + " burn transfers in block range");
+    logger.info("Found " + burnTransfers.length + " burn transfers in block range");
     return burnTransfers;
   } catch (err) {
-    console.log(err);
-    console.log("Errored out, retrying in 1 second...");
+    logger.error(err);
+    logger.warn("Errored out, retrying in 1 second...");
     await new Promise((f) => setTimeout(f, 1000));
     return await getEVMBurnTransfersByBlockRange(
       burnTransfers,
@@ -122,12 +123,12 @@ async function backFillEVMBurnTransfers(
 ): Promise<boolean> {
   try {
     if (toBlock - fromBlock < blockinterval) {
-      console.log("Block interval is larger than the block range, setting block interval to block range");
+      logger.warn("Block interval is larger than the block range, setting block interval to block range");
       blockinterval = toBlock - fromBlock;
     }
 
     const backfills: number = (toBlock - fromBlock) / blockinterval;
-    console.log("Batches of blocks to backfill: " + backfills);
+    logger.info("Batches of blocks to backfill: " + backfills);
 
     let indexblock = fromBlock;
 
@@ -136,7 +137,7 @@ async function backFillEVMBurnTransfers(
       if (indexblock + blockinterval > toBlock) {
         blockinterval = toBlock - indexblock;
       }
-      console.log("Getting blocks in block range: " + indexblock + "-" + (indexblock + blockinterval));
+      logger.info("Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for collection address " + collectionAddress);
       const burnTransfers = await getEVMBurnTransfersByBlockRange(
         [],
         chainId,
@@ -146,17 +147,20 @@ async function backFillEVMBurnTransfers(
         indexblock + blockinterval
       );
       const convertedBurnTransfers = convertEvmNftTransferToBurnList(burnTransfers);
-      console.log(convertedBurnTransfers);
+      
+      if(convertedBurnTransfers.length>0) {
+        logger.info(convertedBurnTransfers);
+      }
 
       if (burnTransfers.length > 0) {
         await loadBurnTransfers(prisma, convertedBurnTransfers);
       }
       indexblock += blockinterval;
     }
-    console.log("Done backfilling burn transfers in block range " + fromBlock + "-" + toBlock);
+    logger.info("Done backfilling burn transfers in block range " + fromBlock + "-" + toBlock + " for collection address " + collectionAddress);
     return true;
   } catch (error) {
-    console.error("Error backfilling burn transfers: ", error);
+    logger.error("Error backfilling burn transfers: ", error);
     return false;
   }
 }
@@ -174,7 +178,7 @@ async function monitorEVMBurnTransfers(
     const currentblock = await getCurrentBlock(chainId);
 
     if (currentblock - last_polled_block >= block_polling_interval) {
-      console.log(
+      logger.info(
         "Current block " +
           currentblock +
           " exceeds the last polled block " +
@@ -186,7 +190,7 @@ async function monitorEVMBurnTransfers(
       await backFillEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, last_polled_block, currentblock, block_polling_interval);
       monitorEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, currentblock, block_polling_interval);
     } else {
-      console.log(
+      logger.info(
         "Current block " +
           currentblock +
           " does not exceed the last polled block " +
@@ -199,8 +203,8 @@ async function monitorEVMBurnTransfers(
       monitorEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, last_polled_block, block_polling_interval);
     }
   } catch (err) {
-    console.log(err);
-    console.log("Errored out, retrying in 1 second...");
+    logger.error(err);
+    console.warn("Errored out, retrying in 1 second...");
     await new Promise((f) => setTimeout(f, 1000));
     monitorEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, last_polled_block, block_polling_interval);
   }
@@ -214,7 +218,7 @@ async function getIMXBurnTransfers(
   maxTimestamp?:Date,
   minTimestamp?:Date
 ): Promise<ListTransfersResponse> {
-  console.log("Doing getIMXBurnTransferRequest, maxTimestamp: " + maxTimestamp?.toISOString() + ", minTimestamp: " + minTimestamp?.toISOString());
+  console.info("Getting IMX burn transfers, maxTimestamp: " + maxTimestamp?.toISOString() + ", minTimestamp: " + minTimestamp?.toISOString());
   const transfers = await client.listTransfers({
     direction: "asc",
     tokenAddress: collectionAddress,
@@ -243,17 +247,17 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
   while (true) {
     //If there's no cursor left then we've reached the end and need to continue polling the endpoint with the old cursor until something new arrives
     if (!transfers.cursor) {
-      console.log("No cursor...");
+      logger.info("No cursor...");
       //console.log("Old cursor: " + oldCursor);
       if(!oldCursor) {
-        console.log("No old cursor...");
+        logger.info("No old cursor...");
         let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
         let minTimestamp = minDelay ? new Date(Date.now() - minDelay) : undefined;
         transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, undefined, maxTimestamp, minTimestamp);
       }
       else {      
         //If there's an old cursor then we need to continue polling with that
-        console.log("Old cursor, we're going to continue polling with that...");
+        logger.info("Old cursor, we're going to continue polling with that...");
         let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
         transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, oldCursor, maxTimestamp);
       }
@@ -261,7 +265,7 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
     //If there's a cursor then we need to add to our array and continue polling
     else {
     //console.log("Cursor: " + transfers.cursor);
-      console.log("Cursor... adding to array and continuing to crawl...");
+      logger.info("Cursor... adding to array and continuing to crawl...");
       transfersArray.push(...transfers.result);
       //console.log(transfers.result);
       let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
@@ -287,7 +291,7 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
 //Loads the burn transfers into the database
 async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): Promise<boolean> {
   try {
-    console.log("Loading " + burnTransfers.length + " burn transfers into the database");
+    logger.info("Loading " + burnTransfers.length + " burn transfers into the database");
     for (const element of burnTransfers) {
       try {
         const burn = await prisma.burn.create({
@@ -305,22 +309,23 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): P
           },
         });
       } catch (error) {
-        console.log(error);
+        logger.error("Error loading burn transfer into the database: ", error);
       }
     }
     prisma.$disconnect;
     return true;
   } catch (error) {
-    console.log("Error loading burn transfers into the database: ", error);
+    logger.error("Error loading burn transfers into the database: ", error);
     return false;
   }
 }
 
 //Starts a watcher instance
 async function watcher(chainId: number, collectionAddress: string, burnAddress: string) {
+  logger.info("Starting watcher...");
   const prisma = new PrismaClient();
   if (chainId === 5000 || chainId === 5001) {
-    console.log("IMX watcher on chainId: " + chainId);
+    logger.info("IMX watcher on chainId: " + chainId + ", collectionAddress: " + collectionAddress + ", burnAddress: " + burnAddress);
     const config = chainId === 5000 ? Config.PRODUCTION : Config.SANDBOX;
     const client = new ImmutableX(config);
     //delayed one
@@ -328,7 +333,7 @@ async function watcher(chainId: number, collectionAddress: string, burnAddress: 
     monitorIMXBurnTransfers(client, prisma, collectionAddress, burnAddress, undefined, 60000);
 
   } else {
-    console.log("EVM watcher on chainId: " + chainId);
+    logger.info("EVM watcher on chainId: " + chainId + ", collectionAddress: " + collectionAddress + ", burnAddress: " + burnAddress);
     await Moralis.start({
       apiKey: process.env.MORALIS_API_KEY,
     });
