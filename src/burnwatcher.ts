@@ -57,7 +57,7 @@ async function getEVMBurnTransfersByBlockRange(
       cursor: cursor,
     });
 
-    //console.log(response.result);
+    //logger.info(response.result);
 
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
@@ -248,7 +248,7 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
     //If there's no cursor left then we've reached the end and need to continue polling the endpoint with the old cursor until something new arrives
     if (!transfers.cursor) {
       logger.info("No cursor...");
-      //console.log("Old cursor: " + oldCursor);
+      //logger.info("Old cursor: " + oldCursor);
       if(!oldCursor) {
         logger.info("No old cursor...");
         let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
@@ -264,10 +264,10 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
     } 
     //If there's a cursor then we need to add to our array and continue polling
     else {
-    //console.log("Cursor: " + transfers.cursor);
+    //logger.info("Cursor: " + transfers.cursor);
       logger.info("Cursor... adding to array and continuing to crawl...");
       transfersArray.push(...transfers.result);
-      //console.log(transfers.result);
+      //logger.info(transfers.result);
       let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
       oldCursor = transfers.cursor;
       transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, transfers.cursor, maxTimestamp);
@@ -359,7 +359,7 @@ watcher(originChainId, originCollectionAddress, burnAddress);
 //   const prisma = new PrismaClient();
 //   //monitorIMXBurnTransfers(client, prisma, "0xc1f1da534e227489d617cd742481fd5a23f6a003", "0x0000000000000000000000000000000000000000", fiveMinute, new Date("2023-04-13T06:06:35.478763Z"));
 //   //const transfers = await getIMXBurnTransfers(client, "0xc1f1da534e227489d617cd742481fd5a23f6a003", "0x0000000000000000000000000000000000000000");
-//   //console.log(transfers);
+//   //logger.info(transfers);
 //   monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000);
 //   monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000, 120000);
 // }
@@ -372,7 +372,7 @@ watcher(originChainId, originCollectionAddress, burnAddress);
 //     apiKey: process.env.MORALIS_API_KEY,
 //   });
 //   const result = await getEVMBurnTransfersByBlockRange([], 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 41161550, 41161560);
-//   console.log(result);
+//   logger.info(result);
 // }
 // main();
 
@@ -386,6 +386,6 @@ watcher(originChainId, originCollectionAddress, burnAddress);
 //   const prisma = new PrismaClient();
 
 //   const result = await backFillEVMBurnTransfers(prisma, 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 40008245, 41161556, 100000);
-//   console.log(result);
+//   logger.info(result);
 // }
 // main();

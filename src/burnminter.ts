@@ -23,6 +23,7 @@ import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setBurnTransferToMi
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";
+import logger from "./logger";
 dotenv.config();
 
 //Mint an EVM asset
@@ -49,7 +50,7 @@ async function mintEVMAsset(
     const tx = await collectionContract.safeMint(to, tokenId, { ...overrides });
     return tx.hash;
   } catch (error) {
-    console.error("Error while minting EVM asset:", error);
+    logger.error("Error while minting EVM asset:", error);
     throw error;
   }
 }
@@ -78,7 +79,7 @@ async function mintEVMAssets(
           EVMMintingGasPrice,
           gasLimit
         );
-        console.log(txhash);
+        logger.info(txhash);
 
         //Create a loop that waits for the asset to be in the Moralis API
         await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
@@ -87,7 +88,7 @@ async function mintEVMAssets(
         setBurnTransferToMinted(prisma, burn.id+tokenIDOffset);
       }
     } catch (error) {
-      console.error(`Error while minting EVM asset for tokenId ${burn.tokenId + tokenIDOffset}:`, error);
+      logger.error(`Error while minting EVM asset for tokenId ${burn.tokenId + tokenIDOffset}:`, error);
       // Optionally, you can decide how to handle the error (e.g., skip the current iteration, retry, etc.)
     }
   }
@@ -104,7 +105,7 @@ async function runEVMRegularMint(
   EVMMintingGasPrice: number,
   gasLimit: number
 ) {
-  console.log(`Checking for new EVM mints on chain ${chainId}...`);
+  logger.info(`Checking for new EVM mints on chain ${chainId} and collection adddress ${collectionAddress}...`);
   const burnTransfers = await getBurnTransfersFromDB(prisma);
   await mintEVMAssets(
     prisma,
@@ -163,7 +164,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
   for (let key in tokensArray) {
     //Check if the user is registered on IMX
     const isRegistered = await isIMXRegistered(imxclient, key);
-    console.log("Checking if recipient address " + key + " is registered on IMX");
+    logger.info("Checking if recipient address " + key + " is registered on IMX");
     if (isRegistered) {
       mintArray[index] = {
         users: [
@@ -176,7 +177,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
       };
       index++;
     } else {
-      console.log("Recipient address " + key + " is not registered on IMX, skipping...");
+      console.warn("Recipient address " + key + " is not registered on IMX, skipping...");
     }
   }
   return mintArray;
@@ -188,15 +189,15 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
 
   for (const element of mintArray) {
     if (element.users[0].tokens.length > IMXMintingBatchSize) {
-      console.log("Batching " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
+      logger.info("Batching " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
 
       //calculate the amount of batches
       const batchcount = Math.floor(element.users[0].tokens.length / IMXMintingBatchSize);
-      console.log("Batch count: " + batchcount);
+      logger.info("Batch count: " + batchcount);
 
       //calculate the remainder after the batches have been created
       const remainder = element.users[0].tokens.length % IMXMintingBatchSize;
-      console.log("Remainder: " + remainder);
+      logger.info("Remainder: " + remainder);
 
       //loop for the batches
       let i: number = 0;
@@ -226,7 +227,7 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
       }
 
       if (remainder != 0) {
-        //console.log('tokenid after batches complete: ' + tokenid);
+        //logger.info('tokenid after batches complete: ' + tokenid);
         let tokens: MintTokenDataV2[] = [];
 
         //Create the last remainder tokens which didn't get included in a batch
@@ -249,8 +250,8 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
       batchifiedMintArray.push(element);
     }
   }
-  console.log("Length of original: " + mintArray.length);
-  console.log("Length of batchified version: " + batchifiedMintArray.length);
+  logger.info("Length of original: " + mintArray.length);
+  logger.info("Length of batchified version: " + batchifiedMintArray.length);
 
   return batchifiedMintArray;
 }
@@ -263,22 +264,22 @@ async function mintIMXBatchArray(
   IMXMintingBatchDelay: number
 ): Promise<MintResult> {
   for (const element of mintArray) {
-    console.log("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
+    logger.info("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
       const result = await imxclient.mint(signer, element);
       for (const user of element.users[0].tokens) {
         await setBurnTransferToMinted(prisma, parseInt(user.id)-tokenIDOffset);
       }
-      console.log(result);
+      logger.info(result);
       return { status: "success", result };
     } catch (error) {
-      console.log("Error minting tokens for " + element.users[0].user);
-      console.log(error);
+      logger.error("Error minting tokens for " + element.users[0].user);
+      logger.error(error);
       if (error instanceof Error) {
-        console.log(error);
+        logger.error(error);
         return { status: "error", errorMessage: error.message };
       } else {
-        console.log("An unknown error occurred.");
+        logger.error("An unknown error occurred.");
         return { status: "error", errorMessage: "An unknown error occurred during minting." };
       }
     } finally {
@@ -301,7 +302,7 @@ async function runIMXRegularMint(
   IMXMintingBatchSize: number,
   IMXMintingRequestDelay: number
 ) {
-  console.log(`Checking for new IMX StarkEx mints on chain ${chainId}...`);
+  logger.info(`Checking for new IMX StarkEx mints on chain ${chainId} and collection address ${collectionAddress}...`);
   //loads the mint array which is going to be passed to the minting function
   const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
 
@@ -362,14 +363,14 @@ minter(destinationChainId, destinationCollectionAddress);
 //   const imxclient = new ImmutableX(config);
 //   const prisma = new PrismaClient();
 //   const mintArray = await loadIMXUserMintArray(imxclient, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3");
-//   console.log(JSON.stringify(mintArray, null, 2));
+//   logger.info(JSON.stringify(mintArray, null, 2));
 
 //   //optional write to file
 //   // fs.writeFile("src/testing/mintArray.json", JSON.stringify(mintArray, null, "\t"), (err) => {
 //   //   if (err) {
-//   //     console.error(err);
+//   //     logger.error(err);
 //   //   } else {
-//   //     console.log("Mint array written to data/mintArray.json");
+//   //     logger.info("Mint array written to data/mintArray.json");
 //   //   }
 //   // });
 // }
@@ -383,15 +384,15 @@ minter(destinationChainId, destinationCollectionAddress);
 
 //   const batchifiedMintArray = await batchIMXMintArray(mintArray, 3);
 
-//   console.log(JSON.stringify(mintArray, null, 2));
-//   console.log(JSON.stringify(batchifiedMintArray, null, 2));
+//   logger.info(JSON.stringify(mintArray, null, 2));
+//   logger.info(JSON.stringify(batchifiedMintArray, null, 2));
 
 //   // //Optional write to file
 //   // fs.writeFile("src/testing/batchifiedMintArray.json", JSON.stringify(batchifiedMintArray, null, "\t"), (err) => {
 //   //   if (err) {
-//   //     console.error(err);
+//   //     logger.error(err);
 //   //   } else {
-//   //     console.log("Batchified mint array written to data/batchifiedMintArray.json");
+//   //     logger.info("Batchified mint array written to data/batchifiedMintArray.json");
 //   //   }
 //   // });
 // }
@@ -412,9 +413,9 @@ minter(destinationChainId, destinationCollectionAddress);
 //   // //Optional write to file
 //   // fs.writeFile("src/testing/batchifiedMintArray.json", JSON.stringify(batchifiedMintArray, null, "\t"), (err) => {
 //   //   if (err) {
-//   //     console.error(err);
+//   //     logger.error(err);
 //   //   } else {
-//   //     console.log("Batchified mint array written to data/batchifiedMintArray.json");
+//   //     logger.info("Batchified mint array written to data/batchifiedMintArray.json");
 //   //   }
 //   // });
 // }

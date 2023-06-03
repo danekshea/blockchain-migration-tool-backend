@@ -6,6 +6,7 @@ import * as dotenv from 'dotenv';
 import { originChainId } from './config';
 import { EvmNftTransfer, GetTransactionRequest, GetTransactionResponseAdapter } from '@moralisweb3/common-evm-utils';
 import { burn } from './type';
+import logger from './logger';
 dotenv.config();
 
 export async function getSigner(network: string, privateKey: string):Promise<Wallet> {
@@ -31,7 +32,7 @@ export async function getCurrentBlock(chainId: number): Promise<number> {
     const currentBlock = currentBlockResponse.result.block;
     return currentBlock;
   } catch (error:any) {
-    console.error('Failed to fetch the current block:', error.message);
+    logger.error('Failed to fetch the current block:', error.message);
     throw new Error('Failed to fetch the current block');
   }
 }
@@ -43,7 +44,7 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
     return true;
   }
   catch (err) {
-    console.log(err);
+    logger.error(err);
     return false;
   }
 }
@@ -69,7 +70,7 @@ async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
 
     return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
   } catch (error:any) {
-    console.error('Failed to fetch block numbers:', error.message);
+    logger.error('Failed to fetch block numbers:', error.message);
     throw new Error('Failed to fetch block numbers');
   }
 }
@@ -117,7 +118,7 @@ export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Burn
     });
     return burnTransfers;
   } catch (error:any) {
-    console.error('Failed to fetch burn transfers from the database:', error.message);
+    logger.error('Failed to fetch burn transfers from the database:', error.message);
     return [];
   }
 }
@@ -130,7 +131,7 @@ export async function setBurnTransferToMinted(prisma: PrismaClient, burnTokenId:
     });
     return true;
   } catch (error:any) {
-    console.error('Failed to set burn transfer for ' + burnTokenId + " to minted:", error.message);
+    logger.error('Failed to set burn transfer for ' + burnTokenId + " to minted:", error.message);
     return false;
   }
 }
@@ -141,13 +142,13 @@ export async function transactionConfirmation(txhash:string, chainId:number, pol
     const txrequest:GetTransactionRequest = {transactionHash: txhash, chain: chainId}
     let tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
     while (tx === null || tx.result === null) {
-      console.log("Waiting for transaction " + txrequest.transactionHash + " to be confirmed...");
+      logger.info("Waiting for transaction " + txrequest.transactionHash + " to be confirmed...");
       await new Promise((r) => setTimeout(r, pollingDelay));
       tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
     }
     return true;
   } catch (error:any) {
-    console.error("Failed to fetch transaction details:", error.message);
+    logger.error("Failed to fetch transaction details:", error.message);
     throw new Error("Failed to fetch transaction details");
   }
 }
