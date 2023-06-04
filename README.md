@@ -73,6 +73,7 @@ pm2 start npm --name "minter" -- run minter
 * More thorough testing of token offset parameter
 
 ## Long-term to-do
+* Improve error logging, for example a duplicate mint just puts the whole message into the message field, ideally it should break down the stack etc.
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
 * Add auditing to StarkEx watcher because it might miss assets due to an ordering issue with the IMX APIs
 * Add support for other EVM NaaS providers than Moralis

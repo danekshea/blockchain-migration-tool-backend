@@ -274,9 +274,9 @@ async function mintIMXBatchArray(
       return { status: "success", result };
     } catch (error) {
       logger.error("Error minting tokens for " + element.users[0].user);
-      logger.error(error);
+      logger.error(JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (error instanceof Error) {
-        logger.error(error);
+        console.log(error);
         return { status: "error", errorMessage: error.message };
       } else {
         logger.error("An unknown error occurred.");
