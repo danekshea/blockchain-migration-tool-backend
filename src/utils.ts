@@ -4,7 +4,7 @@ import Moralis from "moralis";
 import { Token, PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
 import { EvmNftTransfer, GetTransactionRequest } from '@moralisweb3/common-evm-utils';
-import { burn } from './type';
+import { NftTransfer, burn, chainDetails } from './type';
 import logger from './logger';
 dotenv.config();
 
@@ -74,20 +74,20 @@ async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
   }
 }
 
-export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {
+export function convertEvmNftTransferToBurn(evmt: NftTransfer): burn {
   return {
-    chain: evmt.chain.decimal, // You might need to convert the chain value to a number if it isn't already
+    chain: evmt.chainId, 
     timestamp: evmt.blockTimestamp,
-    blockNumber: parseInt(evmt.blockNumber.toString()),
+    blockNumber: evmt.blockNumber,
     transactionHash: evmt.transactionHash,
-    tokenAddress: evmt.tokenAddress.lowercase, // You might need to convert the tokenAddress value to a string if it isn't already
-    tokenId: parseInt(evmt.tokenId),
-    fromAddress: evmt.fromAddress?.lowercase, // You might need to convert the fromAddress value to a string if it isn't already
-    toAddress: evmt.toAddress.lowercase, // You might need to convert the toAddress value to a string if it isn't already
+    tokenAddress: evmt.tokenAddress, 
+    tokenId: evmt.tokenId,
+    fromAddress: evmt.fromAddress, 
+    toAddress: evmt.toAddress, 
   };
 }
 
-export function convertEvmNftTransferToBurnList(evmtList: EvmNftTransfer[]): burn[] {
+export function convertEvmNftTransferToBurnList(evmtList: NftTransfer[]): burn[] {
   return evmtList.map(convertEvmNftTransferToBurn);
 }
 
@@ -172,6 +172,24 @@ export async function transactionConfirmation(txhash:string, chainId:number, pol
     logger.error("Failed to fetch transaction details:", error.message);
     throw new Error("Failed to fetch transaction details");
   }
+}
+
+//Key value pairs for the different chains, contains chain details
+export const chains: { [key: number]: chainDetails } = {
+  1: {name: "Ethereum", shortName: "eth"},
+  5: {name: "Goerli", shortName: "goerli"},
+  25: {name: "Cronos", shortName: "cro"},
+  56: {name: "BNB Chain", shortName: "bnb"},
+  97: {name: "BNB Chain Testnet", shortName: "bsc testnet"},
+  137: {name: "Polygon", shortName: "polygon"},
+  250: {name: "Fantom", shortName: "fantom"},
+  5000: {name: "ImmutableX", shortName: "imx"},
+  5001: {name: "ImmutableX Testnet", shortName: "imx testnet"},
+  42161: {name: "Arbitrum", shortName: "arbitrum"},
+  43114: {name: "Avalanche", shortName: "avalanche"},
+  //polygon testnet
+  80001: {name: "Mumbai", shortName: "mumbai"},
+  11155111: {name: "Sepolia", shortName: "sepolia"},
 }
 
 

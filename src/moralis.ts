@@ -1,20 +1,22 @@
 import axios from "axios";
 import "dotenv/config";
-import {
-  TokenTransferResponse,
-} from "./type";
-import * as fs from "fs";
-import { originCollectionAddress } from "./config";
+import { MoralisGetNFTContractTransfersResponse, NftTransfer, TokenTransferResponse } from "./type";
+import { chains } from "./utils";
+import logger from "./logger";
 
-async function getTransfersFromContract(collectionAddress:string, pagePointer:string) {
-  const chain: string = "polygon";
-  const pagePointerQueryString = pagePointer ? `cursor=${pagePointer}` : "";
+export async function getTransfersFromContract(
+  collectionAddress:string,
+  chainId:number,
+  fromBlock:number,
+  toBlock:number,
+  cursor:string | undefined
 
-  // [?] Undocumented direction=to
-  const url = `https://deep-index.moralis.io/api/v2/nft/${collectionAddress}/transfers?chain=${chain}&format=decimal&direction=to&${pagePointerQueryString}`;
+): Promise<MoralisGetNFTContractTransfersResponse> {
+  const pagePointerQueryString = cursor ? `cursor=${cursor}` : "";
+
+  const url = `https://deep-index.moralis.io/api/v2/nft/${collectionAddress}/transfers?chain=${chains[chainId].shortName}&to_block=${toBlock}&from_block=${fromBlock}&format=decimal&limit=5&${pagePointerQueryString}`;
 
   try {
-    // console.log(`Fetching data from ${url}`)
     const { status, data } = await axios.get<TokenTransferResponse>(url, {
       headers: {
         "Content-Type": "application/json",
@@ -22,16 +24,24 @@ async function getTransfersFromContract(collectionAddress:string, pagePointer:st
       },
     });
 
-    console.log(data.result);
-
-    if (status !== 200) {
-      throw new Error(`Unable to retrieve transfers from contract ${collectionAddress}`);
-    }
-
-    console.log(`Fetched ${data.result.length} transfers from contract ${collectionAddress}`);
+    const transfers: NftTransfer[] = data.result.map((item: any) => ({
+      chainId: chainId,
+      tokenAddress: item.token_address.toLowerCase(),
+      tokenId: parseInt(item.token_id),
+      fromAddress: item.from_address.toLowerCase(),
+      toAddress: item.to_address.toLowerCase(),
+      blockNumber: parseInt(item.block_number),
+      blockTimestamp: new Date(item.block_timestamp),
+      transactionHash: item.transaction_hash.toLowerCase(),
+    }));
+    
+    const response: MoralisGetNFTContractTransfersResponse = {
+      transfers: transfers,
+      cursor: data.cursor,
+    };
+    return response;
   } catch (err) {
-    console.log(err);
+    logger.error(err);
+    throw new Error(`Failed to fetch transfers from contract ${collectionAddress}`);
   }
-};
-
-getTransfersFromContract(originCollectionAddress, "");
+}
