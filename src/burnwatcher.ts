@@ -44,8 +44,8 @@ async function getEVMBurnTransfersByBlockRange(
 
   //Moralis doesn't allow requests for more than 1m blocks at a time
   if (toBlock - fromBlock > 1000000) {
-    logger.info("Moralis API doesn't allow more than 1 million blocks in a request, setting toBlock to " + fromBlock + 1000000);
     toBlock = fromBlock + 1000000;
+    logger.info("Moralis API doesn't allow more than 1 million blocks in a request, setting toBlock to " + toBlock);
   }
 
   //Get all transfers for a collection address and chain
@@ -58,12 +58,15 @@ async function getEVMBurnTransfersByBlockRange(
       cursor: cursor,
     });
 
+    //console.log(response.raw);
+
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
     //Iterate through and sort out the burn transfers and push them into an array, make sure no duplicate tokenIDs are loaded
     const burnEVMAddress = EvmAddress.create(burnAddress);
     for (const element of response.result) {
+      console.log(element);
       if (element.toAddress.lowercase == burnEVMAddress.lowercase && !usedtokenids.includes(element.tokenId)) {
         burnTransfers.push(element);
         usedtokenids.push(element.tokenId);
@@ -358,15 +361,15 @@ async function watcher(chainId: number, collectionAddress: string, burnAddress: 
 //watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for backfilling
-async function main() {
-  const prisma = new PrismaClient();
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
-  const currentBlock = await getCurrentBlock(originChainId);
-  backFillEVMBurnTransfers(prisma, originChainId, originCollectionAddress, burnAddress, 39985828, currentBlock, 100000);
-}
-main();
+// async function main() {
+//   const prisma = new PrismaClient();
+//   await Moralis.start({
+//     apiKey: process.env.MORALIS_API_KEY,
+//   });
+//   const currentBlock = await getCurrentBlock(originChainId);
+//   backFillEVMBurnTransfers(prisma, originChainId, originCollectionAddress, burnAddress, 39985828, currentBlock, 100000);
+// }
+// main();
 
 
 //Test monitorIMXBurnTransfers
@@ -382,18 +385,18 @@ main();
 // }
 // main();
 
-// //Test for getEVMBurnTransfersByBlockRange
-// async function main() {
-//   //Create the Moralis client
-//   await Moralis.start({
-//     apiKey: process.env.MORALIS_API_KEY,
-//   });
-//   const currentBlock = await getCurrentBlock(137);
-//   const result = await getEVMBurnTransfersByBlockRange([], 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 40008245, currentBlock);
-//   //console.log(result);
-//   // for (const element of result) {
-//   //   console.log(result[0].tokenAddress.format());
-//   // }
-// }
-// main();
+//Test for getEVMBurnTransfersByBlockRange
+async function main() {
+  //Create the Moralis client
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+  const currentBlock = await getCurrentBlock(137);
+  const result = await getEVMBurnTransfersByBlockRange([], 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 40008245, currentBlock);
+  // console.log(result);
+  // for (const element of result) {
+  //   console.log(element.tokenAddress);
+  // }
+}
+main();
 

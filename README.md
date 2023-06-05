@@ -67,6 +67,7 @@ pm2 start npm --name "minter" -- run minter
 # Things to note
 * 50k mints is the limit with an API key, contact Partner Success if you need to up this limit.
 * There's the ability to offset the tokenIDs in the case that you don't want to mint tokenID:tokenID, be wary fo using this parameter and make sure you don't have collisions etc.
+* The Moralis SDK has issues with return values and types, at least within 2.22.0, this was previously experienced on another project within our team as well. In the end, I had to implement my own Axios requests. Beware if you try to leverage the Moralis SDK.
 
 ## Immediate to-do
 * Add intelligent gas estimation to the EVM minting side

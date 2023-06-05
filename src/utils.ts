@@ -48,31 +48,31 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
   }
 }
 
-// async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
-//   try {
-//     const results = await prisma.token.findMany({
-//       where: {
-//         blockNumber: {
-//           not: null,
-//         },
-//       },
-//       orderBy: [
-//         {
-//           blockNumber: 'desc',
-//         },
-//       ],
-//     });
+async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
+  try {
+    const results = await prisma.token.findMany({
+      where: {
+        blockNumber: {
+          not: null,
+        },
+      },
+      orderBy: [
+        {
+          blockNumber: 'desc',
+        },
+      ],
+    });
 
-//     if (results.length === 0) {
-//       throw new Error('No records with non-null blockNumbers were found');
-//     }
+    if (results.length === 0) {
+      throw new Error('No records with non-null blockNumbers were found');
+    }
 
-//     return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
-//   } catch (error:any) {
-//     logger.error('Failed to fetch block numbers:', error.message);
-//     throw new Error('Failed to fetch block numbers');
-//   }
-// }
+    return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
+  } catch (error:any) {
+    logger.error('Failed to fetch block numbers:', error.message);
+    throw new Error('Failed to fetch block numbers');
+  }
+}
 
 export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {
   return {
