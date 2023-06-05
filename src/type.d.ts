@@ -1,5 +1,4 @@
 import { MintTokensResponse, MintUser } from "@imtbl/core-sdk";
-import { EvmNftTransfer } from "@moralisweb3/common-evm-utils";
 
 export interface burn {
   chain: number;
@@ -9,7 +8,7 @@ export interface burn {
   transaction_id?: number;
   tokenAddress: string;
   tokenId: number;
-  fromAddress?: string;
+  fromAddress: string;
   toAddress: string;
 }
 

@@ -43,7 +43,7 @@ Initialize the database:
 npx prisma migrate dev --name init
 ```
 
-Fill out the config.ts file with the required information.
+Configure the tool in configure.ts. The simplest implementation is a 1:1 tokenID and wallet address mapping. 
 
 ## Usage
 Launch the watcher:
@@ -64,14 +64,23 @@ pm2 start npm --name "watcher" -- run watcher
 ```bash
 pm2 start npm --name "minter" -- run minter
 ```
+# Features
+## Token Offsets
+Tokens can be minted with offset token IDs meaning that if tokenID 1 on originChain can become tokenID 10001 on destination chain. Use caution when using this feature as it can lead to collisions and lack of traceability if the mapping data is lost.
+
+## Address Mapping
+Address mapping is supported where a wallet address on the origin chain can be mapped to a different address on the destination chain. This is useful for example if you want to migrate tokens from a wallet to a smart contract or from a wallet that only works on the origin chain. Again, use caution when using this feature as it can lead to collisions and lack of traceability if the mapping data is lost. Additionally, make sure that you can verify the destination address. A fool proof way of doing this is asking the origin address to sign a message with the destination address.
+
 # Things to note
 * 50k mints is the limit with an API key, contact Partner Success if you need to up this limit.
 * There's the ability to offset the tokenIDs in the case that you don't want to mint tokenID:tokenID, be wary fo using this parameter and make sure you don't have collisions etc.
 * The Moralis SDK has issues with return values and types, at least within 2.22.0, this was previously experienced on another project within our team as well. In the end, I had to implement my own Axios requests. Beware if you try to leverage the Moralis SDK.
+* The tokenID offset and address mapping has been done upon entry into the DB for data integrity purposes and better type safety for the minter.
 
 ## Immediate to-do
 * Add intelligent gas estimation to the EVM minting side
 * More thorough testing of token offset parameter
+* Rectify variable shadowing
 
 ## Long-term to-do
 * Improve error logging, for example a duplicate mint just puts the whole message into the message field, ideally it should break down the stack etc.
@@ -80,3 +89,4 @@ pm2 start npm --name "minter" -- run minter
 * Add support for other EVM NaaS providers than Moralis
 
 ## License
+MIT License

@@ -15,32 +15,26 @@ model Token {
   burned Boolean
   minted Boolean
   originChain Int
-  destinationChain Int?
+  destinationChain Int
   blockNumber Int?
-  burnTimestamp DateTime
+  burnTimestamp DateTime?
   burnEVMTransactionHash String?
   mintEVMTransactionHash String?
   burnStarkTransaction_id Int?
   mintStarkTransaction_id Int?
-  originTokenAddress String
-  destinationTokenAddress String?
+  originCollectionAddress String
+  destinationCollectionAddress String
   originTokenId Int  @unique
-  destinationTokenId Int? @unique
-  fromOriginAddress String?
-  toOriginAddress String
-  toDestinationAddress String?
+  destinationTokenId Int @unique
+  fromOriginWalletAddress String
+  toOriginWalletAddress String?
+  toDestinationWalletAddress String
 }
 
 model AddressMapping {
   id    Int     @id @default(autoincrement())
   originChain Int
   destinationChain Int
-  originAddress String
-  destinationAddress String
-}
-
-model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  name  String?
+  originWalletAddress String
+  destinationWalletAddress String
 }

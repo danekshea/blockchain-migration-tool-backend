@@ -1,4 +1,4 @@
-import { Burn, PrismaClient } from "@prisma/client";
+import { Token, PrismaClient } from "@prisma/client";
 import Moralis from "moralis";
 import { ImmutableX, Config, MintTokenDataV2, MintRequest, MintUser, MintTokensResponse, IMXError } from "@imtbl/core-sdk";
 import {
@@ -16,10 +16,11 @@ import {
   transactionConfirmationPollingDelay,
   EVMMintingRequestDelay,
   tokenIDOffset,
+  addressMappingEnabled,
 } from "./config";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
-import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setTokenToMinted, transactionConfirmation } from "./utils";
+import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setEVMTokenToMinted, setTokenToMinted, transactionConfirmation } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";
@@ -59,7 +60,7 @@ async function mintEVMAsset(
 async function mintEVMAssets(
   prisma: PrismaClient,
   signer: Signer,
-  burnTransfers: Burn[],
+  tokens: Token[],
   chainId: number,
   collectionAddress: string,
   contractABI: string,
@@ -67,26 +68,37 @@ async function mintEVMAssets(
   EVMMintingGasPrice: number,
   gasLimit: number
 ) {
-  for (const burn of burnTransfers) {
+  for (const token of tokens) {
     try {
-      if (burn.fromAddress) {
+      if (!addressMappingEnabled) {
         const txhash = await mintEVMAsset(
           signer,
           collectionAddress,
-          burn.fromAddress,
-          burn.tokenId + tokenIDOffset,
+          token.fromOriginWalletAddress,
+          token.originTokenId + tokenIDOffset,
           contractABI,
           EVMMintingGasPrice,
           gasLimit
         );
-        logger.info(txhash);
-
-        //Create a loop that waits for the asset to be in the Moralis API
-        await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
-
-        //Set the database entry to minted
-        setBurnTransferToMinted(prisma, burn.id+tokenIDOffset);
       }
+      else {
+        const txhash = await mintEVMAsset(
+          signer,
+          collectionAddress,
+          token.toDestinationWalletAddress,
+          token.destinationTokenId + tokenIDOffset,
+          contractABI,
+          EVMMintingGasPrice,
+          gasLimit
+        );
+      }
+      logger.info(txhash);
+
+      //Create a loop that waits for the asset to be in the Moralis API
+      await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
+
+      //Set the database entry to minted
+      setEVMTokenToMinted(prisma, burn.id + tokenIDOffset);
     } catch (error) {
       logger.error(`Error while minting EVM asset for tokenId ${burn.tokenId + tokenIDOffset}:`, error);
       // Optionally, you can decide how to handle the error (e.g., skip the current iteration, retry, etc.)
@@ -268,7 +280,7 @@ async function mintIMXBatchArray(
     try {
       const result = await imxclient.mint(signer, element);
       for (const user of element.users[0].tokens) {
-        await setBurnTransferToMinted(prisma, parseInt(user.id)-tokenIDOffset);
+        await setBurnTransferToMinted(prisma, parseInt(user.id) - tokenIDOffset);
       }
       logger.info(result);
       return { status: "success", result };
