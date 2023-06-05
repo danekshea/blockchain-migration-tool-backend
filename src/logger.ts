@@ -8,11 +8,15 @@ const transportsArray: transport[] = [
       format.colorize(),
       format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
       format.printf((info) => {
-        return `[${info.timestamp}][${info.level}]${info.message}`;
+        // If info.message is an object, pretty print it. Otherwise, leave it as is.
+        const message = typeof info.message === 'object' ? JSON.stringify(info.message, null, 2) : info.message;
+        return `[${info.timestamp}][${info.level}]${message}`;
       })
     ),
   }),
+  // ... other code
 ];
+
 
 //If logging to file is enabled in config.ts, let's output to file, we also want to use a file per day, datePattern dictates the frequency
 if (enableFileLogging) {

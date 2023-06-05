@@ -26,7 +26,7 @@ export const IMXMintingRequestDelay: number = 5000;
 export const burnAddress: string = "0x0000000000000000000000000000000000000000";
 
 //Token ID offset, this number is added to the original token ID to get the new token ID
-export const tokenIDOffset: number = 1;
+export const tokenIDOffset: number = 0;
 
 //ABI for the minting contract on the EVM side
 export const contractABI: string = JSON.parse(
@@ -35,6 +35,8 @@ export const contractABI: string = JSON.parse(
 
 //Time to wait between polling for transaction confirmation during mints on EVM chains, in milliseconds
 export const transactionConfirmationPollingDelay:number = 3000;
+
+export const EVMBlockPollingInterval:number = 5;
 
 //Delays between reading from the DB and attempting to mint on EVM chains, in milliseconds
 export const EVMMintingRequestDelay:number = 1000;

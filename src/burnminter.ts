@@ -19,7 +19,7 @@ import {
 } from "./config";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
-import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setBurnTransferToMinted, transactionConfirmation } from "./utils";
+import { getBurnTransfersFromDB, getSigner, isIMXRegistered, setTokenToMinted, transactionConfirmation } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";

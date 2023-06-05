@@ -6,8 +6,9 @@ import { getCurrentBlock, convertEvmNftTransferToBurnList, convertIMXTransferToB
 import { burn } from "./type";
 import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/core-sdk";
 import { ListTransfersResponse } from "@imtbl/core-sdk";
-import { burnAddress, originChainId, originCollectionAddress } from "./config";
+import { EVMBlockPollingInterval, burnAddress, originChainId, originCollectionAddress } from "./config";
 import logger from "./logger";
+import { hexValue } from "ethers/lib/utils";
 dotenv.config();
 
 //Retrieves the burn transfers from a certain block range and curses through them recursively
@@ -57,8 +58,6 @@ async function getEVMBurnTransfersByBlockRange(
       cursor: cursor,
     });
 
-    //logger.info(response.result);
-
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
@@ -91,7 +90,7 @@ async function getEVMBurnTransfersByBlockRange(
       );
     }
 
-    logger.info("Found " + burnTransfers.length + " burn transfers in block range");
+    logger.info("Found " + burnTransfers.length + " burn transfer(s) in block range");
     return burnTransfers;
   } catch (err) {
     logger.error(err);
@@ -137,7 +136,9 @@ async function backFillEVMBurnTransfers(
       if (indexblock + blockinterval > toBlock) {
         blockinterval = toBlock - indexblock;
       }
-      logger.info("Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for collection address " + collectionAddress);
+      logger.info(
+        "Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for collection address " + collectionAddress
+      );
       const burnTransfers = await getEVMBurnTransfersByBlockRange(
         [],
         chainId,
@@ -147,8 +148,8 @@ async function backFillEVMBurnTransfers(
         indexblock + blockinterval
       );
       const convertedBurnTransfers = convertEvmNftTransferToBurnList(burnTransfers);
-      
-      if(convertedBurnTransfers.length>0) {
+
+      if (convertedBurnTransfers.length > 0) {
         logger.info(convertedBurnTransfers);
       }
 
@@ -211,12 +212,12 @@ async function monitorEVMBurnTransfers(
 }
 
 async function getIMXBurnTransfers(
-  client:ImmutableX,
-  collectionAddress:string,
-  receiver:string,
-  cursor?:string,
-  maxTimestamp?:Date,
-  minTimestamp?:Date
+  client: ImmutableX,
+  collectionAddress: string,
+  receiver: string,
+  cursor?: string,
+  maxTimestamp?: Date,
+  minTimestamp?: Date
 ): Promise<ListTransfersResponse> {
   console.info("Getting IMX burn transfers, maxTimestamp: " + maxTimestamp?.toISOString() + ", minTimestamp: " + minTimestamp?.toISOString());
   const transfers = await client.listTransfers({
@@ -231,11 +232,18 @@ async function getIMXBurnTransfers(
   return transfers;
 }
 
-async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, collectionAddress: string, receiver:string, maxDelay?:number, minDelay?:number) {
+async function monitorIMXBurnTransfers(
+  client: ImmutableX,
+  prisma: PrismaClient,
+  collectionAddress: string,
+  receiver: string,
+  maxDelay?: number,
+  minDelay?: number
+) {
   let transfersArray: Transfer[] = [];
   let burns: burn[] = [];
   let oldCursor = "";
-  let iterations:number = 0;
+  let iterations: number = 0;
 
   //If there's a delay then we need to create a max timestamp
   let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
@@ -249,22 +257,21 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
     if (!transfers.cursor) {
       logger.info("No cursor...");
       //logger.info("Old cursor: " + oldCursor);
-      if(!oldCursor) {
+      if (!oldCursor) {
         logger.info("No old cursor...");
         let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
         let minTimestamp = minDelay ? new Date(Date.now() - minDelay) : undefined;
         transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, undefined, maxTimestamp, minTimestamp);
-      }
-      else {      
+      } else {
         //If there's an old cursor then we need to continue polling with that
         logger.info("Old cursor, we're going to continue polling with that...");
         let maxTimestamp = maxDelay ? new Date(Date.now() - maxDelay) : undefined;
         transfers = await getIMXBurnTransfers(client, collectionAddress, receiver, oldCursor, maxTimestamp);
       }
-    } 
+    }
     //If there's a cursor then we need to add to our array and continue polling
     else {
-    //logger.info("Cursor: " + transfers.cursor);
+      //logger.info("Cursor: " + transfers.cursor);
       logger.info("Cursor... adding to array and continuing to crawl...");
       transfersArray.push(...transfers.result);
       //logger.info(transfers.result);
@@ -274,7 +281,7 @@ async function monitorIMXBurnTransfers(client:ImmutableX, prisma: PrismaClient, 
     }
 
     //We need some sort of trigger to determine when we load the database, for now we're just going to load every 1000 transfers or every 10 iterations
-    if (transfersArray.length > 1000 || (iterations>10 && transfersArray.length>0)) {
+    if (transfersArray.length > 1000 || (iterations > 10 && transfersArray.length > 0)) {
       burns = convertIMXTransfersToBurns(transfersArray, 5001);
       loadBurnTransfers(prisma, burns);
       transfersArray = [];
@@ -294,18 +301,19 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): P
     logger.info("Loading " + burnTransfers.length + " burn transfers into the database");
     for (const element of burnTransfers) {
       try {
-        const burn = await prisma.burn.create({
+        const token = await prisma.token.create({
           data: {
-            minted: 0,
-            chain: element.chain,
+            burned: true,
+            minted: false,
+            originChain: element.chain,
             blockNumber: element.blockNumber || null,
-            timestamp: element.timestamp,
-            transactionHash: element.transactionHash || null,
-            transaction_id: element.transaction_id || null,
-            tokenAddress: element.tokenAddress,
-            tokenId: element.tokenId,
-            fromAddress: element.fromAddress,
-            toAddress: element.toAddress,
+            burnTimestamp: element.timestamp,
+            burnEVMTransactionHash: element.transactionHash || null,
+            burnStarkTransaction_id: element.transaction_id || null,
+            originTokenAddress: element.tokenAddress,
+            originTokenId: element.tokenId,
+            fromOriginAddress: element.fromAddress,
+            toOriginAddress: element.toAddress,
           },
         });
       } catch (error) {
@@ -321,7 +329,7 @@ async function loadBurnTransfers(prisma: PrismaClient, burnTransfers: burn[]): P
 }
 
 //Starts a watcher instance
-async function watcher(chainId: number, collectionAddress: string, burnAddress: string) {
+async function watcher(chainId: number, collectionAddress: string, burnAddress: string, pollingInterval: number) {
   logger.info("Starting watcher...");
   const prisma = new PrismaClient();
   if (chainId === 5000 || chainId === 5001) {
@@ -331,25 +339,34 @@ async function watcher(chainId: number, collectionAddress: string, burnAddress: 
     //delayed one
     //monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000);
     monitorIMXBurnTransfers(client, prisma, collectionAddress, burnAddress, undefined, 60000);
-
   } else {
     logger.info("EVM watcher on chainId: " + chainId + ", collectionAddress: " + collectionAddress + ", burnAddress: " + burnAddress);
     await Moralis.start({
       apiKey: process.env.MORALIS_API_KEY,
     });
     const currentBlock = await getCurrentBlock(chainId);
-    const pollingInterval: number = 5;
     monitorEVMBurnTransfers(prisma, chainId, collectionAddress, burnAddress, currentBlock, pollingInterval);
   }
 }
 
-watcher(originChainId, originCollectionAddress, burnAddress);
+//watcher(originChainId, originCollectionAddress, burnAddress, EVMBlockPollingInterval);
 
 //Polygon mainnet
 //watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
 
 //IMX testnet
 //watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
+
+//Test for backfilling
+async function main() {
+  const prisma = new PrismaClient();
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+  const currentBlock = await getCurrentBlock(originChainId);
+  backFillEVMBurnTransfers(prisma, originChainId, originCollectionAddress, burnAddress, 39985828, currentBlock, 100000);
+}
+main();
 
 
 //Test monitorIMXBurnTransfers
@@ -365,27 +382,18 @@ watcher(originChainId, originCollectionAddress, burnAddress);
 // }
 // main();
 
-//Test for getEVMBurnTransfersByBlockRange
+// //Test for getEVMBurnTransfersByBlockRange
 // async function main() {
 //   //Create the Moralis client
 //   await Moralis.start({
 //     apiKey: process.env.MORALIS_API_KEY,
 //   });
-//   const result = await getEVMBurnTransfersByBlockRange([], 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 41161550, 41161560);
-//   logger.info(result);
+//   const currentBlock = await getCurrentBlock(137);
+//   const result = await getEVMBurnTransfersByBlockRange([], 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 40008245, currentBlock);
+//   //console.log(result);
+//   // for (const element of result) {
+//   //   console.log(result[0].tokenAddress.format());
+//   // }
 // }
 // main();
 
-//Test for getEVMBurnTransfersByBlockRange
-// async function main() {
-//   //Create the Moralis client
-//   await Moralis.start({
-//     apiKey: process.env.MORALIS_API_KEY,
-//   });
-
-//   const prisma = new PrismaClient();
-
-//   const result = await backFillEVMBurnTransfers(prisma, 137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000", 40008245, 41161556, 100000);
-//   logger.info(result);
-// }
-// main();

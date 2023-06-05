@@ -1,10 +1,9 @@
 import { ImmutableX, Transfer } from '@imtbl/core-sdk';
 import { ethers, Wallet } from 'ethers';
 import Moralis from "moralis";
-import { Burn, PrismaClient } from '@prisma/client'
+import { Token, PrismaClient } from '@prisma/client'
 import * as dotenv from 'dotenv';
-import { originChainId } from './config';
-import { EvmNftTransfer, GetTransactionRequest, GetTransactionResponseAdapter } from '@moralisweb3/common-evm-utils';
+import { EvmNftTransfer, GetTransactionRequest } from '@moralisweb3/common-evm-utils';
 import { burn } from './type';
 import logger from './logger';
 dotenv.config();
@@ -49,31 +48,31 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
   }
 }
 
-async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
-  try {
-    const results = await prisma.burn.findMany({
-      where: {
-        blockNumber: {
-          not: null,
-        },
-      },
-      orderBy: [
-        {
-          blockNumber: 'desc',
-        },
-      ],
-    });
+// async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
+//   try {
+//     const results = await prisma.token.findMany({
+//       where: {
+//         blockNumber: {
+//           not: null,
+//         },
+//       },
+//       orderBy: [
+//         {
+//           blockNumber: 'desc',
+//         },
+//       ],
+//     });
 
-    if (results.length === 0) {
-      throw new Error('No records with non-null blockNumbers were found');
-    }
+//     if (results.length === 0) {
+//       throw new Error('No records with non-null blockNumbers were found');
+//     }
 
-    return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
-  } catch (error:any) {
-    logger.error('Failed to fetch block numbers:', error.message);
-    throw new Error('Failed to fetch block numbers');
-  }
-}
+//     return [results[0].blockNumber as number, results[results.length - 1].blockNumber as number];
+//   } catch (error:any) {
+//     logger.error('Failed to fetch block numbers:', error.message);
+//     throw new Error('Failed to fetch block numbers');
+//   }
+// }
 
 export function convertEvmNftTransferToBurn(evmt: EvmNftTransfer): burn {
   return {
@@ -111,10 +110,10 @@ export function convertIMXTransfersToBurns(transfers: Transfer[], chainId: numbe
   return transfers.map(transfer => convertIMXTransferToBurn(transfer, chainId));
 }
 
-export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Burn[]> {
+export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Token[]> {
   try {
-    const burnTransfers = await prisma.burn.findMany({
-      where: { minted: 0 },
+    const burnTransfers = await prisma.token.findMany({
+      where: { minted: false },
     });
     return burnTransfers;
   } catch (error:any) {
@@ -123,15 +122,37 @@ export async function getBurnTransfersFromDB(prisma: PrismaClient): Promise<Burn
   }
 }
 
-export async function setBurnTransferToMinted(prisma: PrismaClient, burnTokenId:number): Promise<boolean> {
+export async function setEVMTokenToMinted(prisma: PrismaClient,  originTokenId:number, destinationChaind:number, mintEVMTransactionHash:string, destinationTokenId:number, toDestinationAddress:string): Promise<boolean> {
   try {
-    await prisma.burn.update({
-      where: { tokenId: burnTokenId },
-      data: { minted: 1 },
+    await prisma.token.update({
+      where: { originTokenId: originTokenId },
+      data: { minted: true,
+              mintEVMTransactionHash: mintEVMTransactionHash,
+              destinationTokenId: destinationTokenId,
+              toDestinationAddress: toDestinationAddress
+      },
     });
     return true;
   } catch (error:any) {
-    logger.error('Failed to set burn transfer for ' + burnTokenId + " to minted:", error.message);
+    logger.error('Failed to set token with originTokenId: ' + originTokenId + " to minted:", error.message);
+    return false;
+  }
+}
+
+export async function setStarkTokenToMinted(prisma: PrismaClient, originTokenId:number, destinationChaind:number, mintStarkTransaction_id:number, destinationTokenId:number, toDestinationAddress:string): Promise<boolean> {
+  try {
+    await prisma.token.update({
+      where: { originTokenId: originTokenId },
+      data: { minted: true,
+              destinationChain: destinationChaind,
+              mintStarkTransaction_id: mintStarkTransaction_id,
+              destinationTokenId: destinationTokenId,
+              toDestinationAddress: toDestinationAddress
+             },
+    });
+    return true;
+  } catch (error:any) {
+    logger.error('Failed to set burn transfer for ' + originTokenId + " to minted:", error.message);
     return false;
   }
 }

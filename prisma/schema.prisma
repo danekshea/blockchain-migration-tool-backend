@@ -10,18 +10,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Burn {
+model Token {
   id    Int     @id @default(autoincrement())
-  minted Int
-  chain Int
+  burned Boolean
+  minted Boolean
+  originChain Int
+  destinationChain Int?
   blockNumber Int?
-  timestamp DateTime
-  transactionHash String?
-  transaction_id Int?
-  tokenAddress String
-  tokenId Int  @unique
-  fromAddress String?
-  toAddress String
+  burnTimestamp DateTime
+  burnEVMTransactionHash String?
+  mintEVMTransactionHash String?
+  burnStarkTransaction_id Int?
+  mintStarkTransaction_id Int?
+  originTokenAddress String
+  destinationTokenAddress String?
+  originTokenId Int  @unique
+  destinationTokenId Int? @unique
+  fromOriginAddress String?
+  toOriginAddress String
+  toDestinationAddress String?
+}
+
+model AddressMapping {
+  id    Int     @id @default(autoincrement())
+  originChain Int
+  destinationChain Int
+  originAddress String
+  destinationAddress String
 }
 
 model User {
