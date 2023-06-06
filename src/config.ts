@@ -1,10 +1,10 @@
 //Basic settings
 
 //Supported chain ids are in the blockchain.ts file
-export const originChainId: number = 137;
+export const originChain: number = 137;
 
 //Destination chaind ID, have a look in blockchain.ts but IMX mainnet is 5000, sandbox is 5001
-export const destinationChainId: number = 5001;
+export const destinationChain: number = 5001;
 
 //Collection address that items are burnt from
 export const originCollectionAddress: string = "0x0551b1C0B01928Ab22A565b58427FF0176De883C";

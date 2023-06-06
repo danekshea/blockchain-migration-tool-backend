@@ -7,7 +7,17 @@ import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/co
 import { ListTransfersResponse } from "@imtbl/core-sdk";
 import logger from "./logger";
 import { getTransfersFromContract } from "./moralis";
-import { EVMBlockPollingInterval, addressMappingEnabled, burnAddress, originChainId, originCollectionAddress, tokenIDOffset } from "./config";
+import {
+  EVMBlockPollingInterval,
+  burnAddress,
+  originChain,
+  destinationChain,
+  destinationCollectionAddress,
+  originCollectionAddress,
+  addressMappingEnabled,
+} from "./config";
+import { tokenIDOffset as configTokenIDOffset } from "./config";
+import { addressMappingEnabled as configAddressMappingEnabled } from "./config";
 dotenv.config();
 
 //Retrieves the burn transfers from a certain block range and curses through them recursively
@@ -103,12 +113,15 @@ async function getEVMBurnTransfersByBlockRange(
 async function backFillEVMBurnTransfers(
   prisma: PrismaClient,
   originChain: number,
+  destinationChain: number,
   originCollectionAddress: string,
-  destinationCollectionAddress:string,
+  destinationCollectionAddress: string,
   burnAddress: string,
   fromBlock: number,
   toBlock: number,
-  blockinterval: number
+  blockinterval: number,
+  tokenIDOffset: number,
+  addressMappingEnabled: boolean
 ): Promise<boolean> {
   try {
     if (toBlock - fromBlock < blockinterval) {
@@ -139,12 +152,8 @@ async function backFillEVMBurnTransfers(
       );
       const convertedBurnTransfers = convertEvmNftTransferToBurnList(burnTransfers);
 
-      if (convertedBurnTransfers.length > 0) {
-        logger.info(convertedBurnTransfers);
-      }
-
       if (burnTransfers.length > 0) {
-        await loadBurnTransfers(prisma, convertedBurnTransfers);
+        await loadBurnTransfers(prisma, destinationChain, destinationCollectionAddress, tokenIDOffset, addressMappingEnabled, convertedBurnTransfers);
       }
       indexblock += blockinterval;
     }
@@ -160,10 +169,14 @@ async function backFillEVMBurnTransfers(
 async function monitorEVMBurnTransfers(
   prisma: PrismaClient,
   originChain: number,
-  collectionAddress: string,
+  destinationChain: number,
+  originCollectionAddress: string,
+  destinationCollectionAddress: string,
   burnAddress: string,
   last_polled_block: number,
-  block_polling_interval: number
+  block_polling_interval: number,
+  tokenIDOffset: number,
+  addressMappingEnabled: boolean
 ) {
   try {
     const currentblock = await getCurrentBlock(originChain);
@@ -178,8 +191,31 @@ async function monitorEVMBurnTransfers(
           block_polling_interval +
           ", backfilling..."
       );
-      await backFillEVMBurnTransfers(prisma, originChain, collectionAddress, burnAddress, last_polled_block, currentblock, block_polling_interval);
-      monitorEVMBurnTransfers(prisma, originChain, collectionAddress, burnAddress, currentblock, block_polling_interval);
+      await backFillEVMBurnTransfers(
+        prisma,
+        originChain,
+        destinationChain,
+        originCollectionAddress,
+        destinationCollectionAddress,
+        burnAddress,
+        last_polled_block,
+        currentblock,
+        block_polling_interval,
+        tokenIDOffset,
+        addressMappingEnabled
+      );
+      monitorEVMBurnTransfers(
+        prisma,
+        originChain,
+        destinationChain,
+        originCollectionAddress,
+        destinationCollectionAddress,
+        burnAddress,
+        currentblock,
+        block_polling_interval,
+        tokenIDOffset,
+        addressMappingEnabled
+      );
     } else {
       logger.info(
         "Current block " +
@@ -191,13 +227,35 @@ async function monitorEVMBurnTransfers(
       );
       //Delay before checking again
       await new Promise((f) => setTimeout(f, 1000));
-      monitorEVMBurnTransfers(prisma, originChain, collectionAddress, burnAddress, last_polled_block, block_polling_interval);
+      monitorEVMBurnTransfers(
+        prisma,
+        originChain,
+        destinationChain,
+        originCollectionAddress,
+        destinationCollectionAddress,
+        burnAddress,
+        last_polled_block,
+        block_polling_interval,
+        tokenIDOffset,
+        addressMappingEnabled
+      );
     }
   } catch (err) {
     logger.error(err);
     console.warn("Errored out, retrying in 1 second...");
     await new Promise((f) => setTimeout(f, 1000));
-    monitorEVMBurnTransfers(prisma, originChain, collectionAddress, burnAddress, last_polled_block, block_polling_interval);
+    monitorEVMBurnTransfers(
+      prisma,
+      originChain,
+      destinationChain,
+      originCollectionAddress,
+      destinationCollectionAddress,
+      burnAddress,
+      last_polled_block,
+      block_polling_interval,
+      tokenIDOffset,
+      addressMappingEnabled
+    );
   }
 }
 
@@ -227,8 +285,10 @@ async function monitorIMXBurnTransfers(
   prisma: PrismaClient,
   destinationChain: number,
   originCollectionAddress: string,
-  destinationCollectionAddress:string,
+  destinationCollectionAddress: string,
   receiver: string,
+  tokenIDOffset: number,
+  addressMappingEnabled: boolean,
   maxDelay?: number,
   minDelay?: number
 ) {
@@ -275,7 +335,7 @@ async function monitorIMXBurnTransfers(
     //We need some sort of trigger to determine when we load the database, for now we're just going to load every 1000 transfers or every 10 iterations
     if (transfersArray.length > 1000 || (iterations > 10 && transfersArray.length > 0)) {
       burns = convertIMXTransfersToBurns(transfersArray, 5001);
-      loadBurnTransfers(prisma, destinationChain, destinationCollectionAddress, burns);
+      loadBurnTransfers(prisma, destinationChain, destinationCollectionAddress, tokenIDOffset, addressMappingEnabled, burns);
       transfersArray = [];
       burns = [];
       iterations = 0;
@@ -289,19 +349,20 @@ async function monitorIMXBurnTransfers(
 
 //Loads the burn transfers into the database
 async function loadBurnTransfers(
-  prisma: PrismaClient, 
-  destinationChain:number,
-  destinationCollectionAddress:string,
+  prisma: PrismaClient,
+  destinationChain: number,
+  destinationCollectionAddress: string,
+  tokenIDOffset: number,
+  addressMappingEnabled: boolean,
   burnTransfers: burn[]
-  ): Promise<boolean> {
+): Promise<boolean> {
   try {
-    logger.info("Loading " + burnTransfers.length + " burn transfers into the database");
+    logger.info("Loading " + burnTransfers.length + " burn transfer(s) into the database");
     for (const burn of burnTransfers) {
       try {
-
         //If address mapping is enabled, we need to check if there's an entry for the address, if there is, we need to make sure it corresponds to the right chain path
-        let toDestinationAddress = burn.fromAddress;
-        if(addressMappingEnabled) {
+        let toDestinationWalletAddress = burn.fromAddress;
+        if (addressMappingEnabled) {
           const addressMapping = await prisma.addressMapping.findFirst({
             where: {
               originChain: burn.chain,
@@ -309,29 +370,34 @@ async function loadBurnTransfers(
               originWalletAddress: burn.fromAddress,
             },
           });
-          
-          if(addressMapping) {
-            toDestinationAddress = addressMapping.destinationWalletAddress;
+
+          if (addressMapping) {
+            logger.info("Found address mapping for " + burn.fromAddress + " on originChain " + burn.chain + " to " + addressMapping.destinationWalletAddress + " on destinationChain " + destinationChain)
+            toDestinationWalletAddress = addressMapping.destinationWalletAddress;
           }
         }
+        const tokenData = {
+          burned: true,
+          minted: false,
+          originChain: burn.chain,
+          destinationChain: destinationChain,
+          originBlockNumber: burn.blockNumber || null,
+          burnTimestamp: burn.timestamp,
+          burnEVMTransactionHash: burn.transactionHash || null,
+          burnStarkTransaction_id: burn.transaction_id || null,
+          originCollectionAddress: burn.tokenAddress,
+          destinationCollectionAddress: destinationCollectionAddress,
+          originTokenId: burn.tokenId,
+          destinationTokenId: burn.tokenId + tokenIDOffset,
+          fromOriginWalletAddress: burn.fromAddress,
+          toOriginWalletAddress: burn.toAddress,
+          toDestinationWalletAddress: toDestinationWalletAddress,
+        };
+        
+        logger.info(JSON.stringify(tokenData, null, 2));
+        
         const token = await prisma.token.create({
-          data: {
-            burned: true,
-            minted: false,
-            originChain: burn.chain,
-            destinationChain: destinationChain,
-            blockNumber: burn.blockNumber || null,
-            burnTimestamp: burn.timestamp,
-            burnEVMTransactionHash: burn.transactionHash || null,
-            burnStarkTransaction_id: burn.transaction_id || null,
-            originCollectionAddress: burn.tokenAddress,
-            destinationCollectionAddress: destinationCollectionAddress,
-            originTokenId: burn.tokenId,
-            destinationTokenId: burn.tokenId+tokenIDOffset,
-            fromOriginWalletAddress: burn.fromAddress,
-            toOriginWalletAddress: burn.toAddress,
-            toDestinationWalletAddress: toDestinationAddress
-          },
+          data: tokenData
         });
       } catch (error) {
         logger.error("Error loading burn transfer into the database: ", error);
@@ -346,27 +412,57 @@ async function loadBurnTransfers(
 }
 
 //Starts a watcher instance
-async function watcher(originChain: number, destinationChain:number, originCollectionAddress: string, destinationCollectionAddress:string, burnAddress: string, pollingInterval: number) {
+async function watcher(
+  originChain: number,
+  destinationChain: number,
+  originCollectionAddress: string,
+  destinationCollectionAddress: string,
+  burnAddress: string,
+  pollingInterval: number,
+  tokenIDOffset: number,
+  addressMappingEnabled: boolean
+) {
   logger.info("Starting watcher...");
   const prisma = new PrismaClient();
+
+  const logObject = {
+    originChain,
+    destinationChain,
+    originCollectionAddress,
+    destinationCollectionAddress,
+    burnAddress,
+    tokenIDOffset,
+    addressMappingEnabled
+  };
+
   if (originChain === 5000 || originChain === 5001) {
-    logger.info("IMX watcher on originChain: " + originChain + ", originCollectionAddress: " + originCollectionAddress + ", burnAddress: " + burnAddress);
+    logger.info("IMX watcher configuration:\n" + JSON.stringify(logObject, null, 2));
     const config = originChain === 5000 ? Config.PRODUCTION : Config.SANDBOX;
     const client = new ImmutableX(config);
-    //delayed one
-    //monitorIMXBurnTransfers(client, prisma, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000", 60000);
-    monitorIMXBurnTransfers(client, prisma, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, undefined, 60000);
+    monitorIMXBurnTransfers(client, prisma, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, tokenIDOffset, addressMappingEnabled, undefined, 60000);
   } else {
-    logger.info("EVM watcher on originChain: " + originChain + ", originCollectionAddress: " + originCollectionAddress + ", burnAddress: " + burnAddress);
+    logger.info("EVM watcher configuration:\n" + JSON.stringify(logObject, null, 2));
     await Moralis.start({
       apiKey: process.env.MORALIS_API_KEY,
     });
+
     const currentBlock = await getCurrentBlock(originChain);
-    monitorEVMBurnTransfers(prisma, originChain, originCollectionAddress, burnAddress, currentBlock, pollingInterval);
+    monitorEVMBurnTransfers(
+      prisma,
+      originChain,
+      destinationChain,
+      originCollectionAddress,
+      destinationCollectionAddress,
+      burnAddress,
+      currentBlock,
+      pollingInterval,
+      tokenIDOffset,
+      addressMappingEnabled
+    );
   }
 }
 
-watcher(originChainId, originCollectionAddress, burnAddress, EVMBlockPollingInterval);
+//watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
 
 //Polygon mainnet
 //watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
@@ -375,15 +471,15 @@ watcher(originChainId, originCollectionAddress, burnAddress, EVMBlockPollingInte
 //watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for backfilling
-// async function main() {
-//   const prisma = new PrismaClient();
-//   await Moralis.start({
-//     apiKey: process.env.MORALIS_API_KEY,
-//   });
-//   const currentBlock = await getCurrentBlock(originChainId);
-//   backFillEVMBurnTransfers(prisma, originChainId, originCollectionAddress, burnAddress, 39985828, currentBlock, 100000);
-// }
-// main();
+async function main() {
+  const prisma = new PrismaClient();
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+  const currentBlock = await getCurrentBlock(originChain);
+  backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 39985828, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
+}
+main();
 
 //Test monitorIMXBurnTransfers
 // async function main() {

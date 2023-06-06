@@ -87,6 +87,7 @@ Address mapping is supported where a wallet address on the origin chain can be m
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
 * Add auditing to StarkEx watcher because it might miss assets due to an ordering issue with the IMX APIs
 * Add support for other EVM NaaS providers than Moralis
+* Maybe move everything into a config object rather than individual variables
 
 ## License
 MIT License

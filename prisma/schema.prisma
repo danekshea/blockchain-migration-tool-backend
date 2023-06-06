@@ -16,7 +16,7 @@ model Token {
   minted Boolean
   originChain Int
   destinationChain Int
-  blockNumber Int?
+  originBlockNumber Int?
   burnTimestamp DateTime?
   burnEVMTransactionHash String?
   mintEVMTransactionHash String?
