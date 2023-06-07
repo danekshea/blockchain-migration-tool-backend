@@ -139,7 +139,7 @@ async function backFillEVMBurnTransfers(
         blockinterval = toBlock - indexblock;
       }
       logger.info(
-        "Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for collection address " + originCollectionAddress
+        "Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for originCollectionAddress " + originCollectionAddress
       );
       const burnTransfers = await getEVMBurnTransfersByBlockRange(
         [],
@@ -461,7 +461,7 @@ async function watcher(
   }
 }
 
-watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
+//watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
 
 //Polygon mainnet
 //watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
@@ -470,15 +470,15 @@ watcher(originChain, destinationChain, originCollectionAddress, destinationColle
 //watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for backfilling
-// async function main() {
-//   const prisma = new PrismaClient();
-//   await Moralis.start({
-//     apiKey: process.env.MORALIS_API_KEY,
-//   });
-//   const currentBlock = await getCurrentBlock(originChain);
-//   backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 43538618, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
-// }
-// main();
+async function main() {
+  const prisma = new PrismaClient();
+  await Moralis.start({
+    apiKey: process.env.MORALIS_API_KEY,
+  });
+  const currentBlock = await getCurrentBlock(originChain);
+  backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 43538618, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
+}
+main();
 
 //Test monitorIMXBurnTransfers
 // async function main() {

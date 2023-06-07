@@ -22,7 +22,7 @@ export const burnAddress: string = "0x0000000000000000000000000000000000000000";
 export const addressMappingEnabled: boolean = false;
 
 //Token ID offset, this number is added to the original token ID to get the new token ID
-export const tokenIDOffset: number = 0;
+export const tokenIDOffset: number = 10009;
 
 //Enable logging to file
 export const enableFileLogging:boolean = true;
