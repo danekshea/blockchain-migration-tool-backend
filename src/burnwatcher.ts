@@ -13,6 +13,7 @@ import {
   destinationChain,
   destinationCollectionAddress,
   originCollectionAddress,
+  EVMBlockPollingInterval,
 } from "./config";
 import { tokenIDOffset as configTokenIDOffset } from "./config";
 import { addressMappingEnabled as configAddressMappingEnabled } from "./config";
