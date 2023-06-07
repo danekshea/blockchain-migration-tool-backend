@@ -16,7 +16,7 @@ import {
 } from "./config";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
-import { getTokensFromDB, getSigner, isIMXRegistered, setEVMTokenToMinted, setStarkTokenToMinted, transactionConfirmation } from "./utils";
+import { getTokensFromDB, getSigner, isIMXRegistered, setEVMTokenToMinted, setStarkTokenToMinted, transactionConfirmation, chains } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";
@@ -26,9 +26,9 @@ dotenv.config();
 //Mint an EVM asset
 async function mintEVMAsset(
   signer: Signer,
-  collectionAddress: string,
+  destinationCollectionAddress: string,
   to: string,
-  tokenId: number,
+  destinationTokenId: number,
   contractABI: string,
   EVMMintingGasPrice: number,
   EVMMintingGasLimit: number
@@ -42,9 +42,9 @@ async function mintEVMAsset(
       gasLimit: EVMMintingGasLimit,
     };
 
-    const collectionContract = new Contract(collectionAddress, contractABI, signer);
+    const collectionContract = new Contract(destinationCollectionAddress, contractABI, signer);
 
-    const tx = await collectionContract.safeMint(to, tokenId, { ...overrides });
+    const tx = await collectionContract.safeMint(to, destinationTokenId, { ...overrides });
     return tx.hash;
   } catch (error) {
     logger.error("Error while minting EVM asset:", error);
@@ -57,8 +57,8 @@ async function mintEVMAssets(
   prisma: PrismaClient,
   signer: Signer,
   tokens: Token[],
-  chainId: number,
-  collectionAddress: string,
+  destinationChain: number,
+  destinationCollectionAddress: string,
   contractABI: string,
   transactionConfirmationPollingDelay: number,
   EVMMintingGasPrice: number,
@@ -66,28 +66,28 @@ async function mintEVMAssets(
 ) {
   for (const token of tokens) {
     try {
-        logger.info(`Attempting to mint token:\n` + JSON.stringify(token, null, 2));
-        const txhash = await mintEVMAsset(
-          signer,
-          collectionAddress,
-          token.toDestinationWalletAddress,
-          token.destinationTokenId,
-          contractABI,
-          EVMMintingGasPrice,
-          gasLimit
-        );
-      
-      logger.info('Transaction hash: ' + txhash);
+      logger.info(`Attempting to mint token:\n` + JSON.stringify(token, null, 2));
+      const txhash = await mintEVMAsset(
+        signer,
+        destinationCollectionAddress,
+        token.toDestinationWalletAddress,
+        token.destinationTokenId,
+        contractABI,
+        EVMMintingGasPrice,
+        gasLimit
+      );
+
+      logger.info("Transaction hash: " + txhash);
 
       //Create a loop that waits for the asset to be in the Moralis API
-      await transactionConfirmation(txhash, chainId, transactionConfirmationPollingDelay);
+      await transactionConfirmation(txhash, destinationChain, transactionConfirmationPollingDelay);
 
-      logger.info('Transaction confirmed, setting token to minted in DB');
-      
+      logger.info("Transaction confirmed, setting token to minted in DB");
+
       //Set the database entry to minted
       setEVMTokenToMinted(prisma, token.destinationTokenId, txhash);
     } catch (error) {
-      logger.error(`Error while minting EVM asset for tokenId ${token.destinationTokenId}:`, error);
+      logger.error(`Error while minting EVM asset for destinationTokenID ${token.destinationTokenId}:`, error);
       // Optionally, you can decide how to handle the error (e.g., skip the current iteration, retry, etc.)
     }
   }
@@ -96,22 +96,22 @@ async function mintEVMAssets(
 async function runEVMRegularMint(
   prisma: PrismaClient,
   signer: Signer,
-  chainId: number,
-  collectionAddress: string,
+  destinationChain: number,
+  destinationCollectionAddress: string,
   contractABI: string,
   EVMMintingRequestDelay: number,
   transactionConfirmationPollingDelay: number,
   EVMMintingGasPrice: number,
   gasLimit: number
 ) {
-  logger.info(`Checking for new EVM mints on chain ${chainId} and collection adddress ${collectionAddress}...`);
-  const burnTransfers = await getBurnTransfersFromDB(prisma);
+  logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
+  const tokens = await getTokensFromDB(prisma);
   await mintEVMAssets(
     prisma,
     signer,
-    burnTransfers,
-    chainId,
-    collectionAddress,
+    tokens,
+    destinationChain,
+    destinationCollectionAddress,
     contractABI,
     transactionConfirmationPollingDelay,
     EVMMintingGasPrice,
@@ -122,8 +122,8 @@ async function runEVMRegularMint(
   runEVMRegularMint(
     prisma,
     signer,
-    chainId,
-    collectionAddress,
+    destinationChain,
+    destinationCollectionAddress,
     contractABI,
     EVMMintingRequestDelay,
     transactionConfirmationPollingDelay,
@@ -140,19 +140,21 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
   //Go through each token and add an entry for each user or add to an additional user entry, mint requests are broken down by user
   let tokensArray: { [receiverAddress: string]: MintTokenDataV2[] } = {};
   for (const token of tokens) {
+    if(token.destinationCollectionAddress === collectionAddress) {
       //If the user already exists in the array then add the token to the array, otherwise create a new key entry
       if (tokensArray[token.toDestinationWalletAddress]) {
         tokensArray[token.toDestinationWalletAddress].push({
-          id: (token.destinationTokenId).toString(),
-          blueprint: "ipfs://" + IPFS_CID + "/" + (token.destinationTokenId),
+          id: token.destinationTokenId.toString(),
+          blueprint: "ipfs://" + IPFS_CID + "/" + token.destinationTokenId,
         });
       } else {
         tokensArray[token.toDestinationWalletAddress] = [
           {
-            id: (token.destinationTokenId).toString(),
-            blueprint: "ipfs://" + IPFS_CID + "/" + (token.destinationTokenId),
+            id: token.destinationTokenId.toString(),
+            blueprint: "ipfs://" + IPFS_CID + "/" + token.destinationTokenId,
           },
         ];
+      }
     }
   }
 
@@ -247,8 +249,8 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
       batchifiedMintArray.push(element);
     }
   }
-  logger.info("Length of original: " + mintArray.length);
-  logger.info("Length of batchified version: " + batchifiedMintArray.length);
+  logger.info("Length of original mint array: " + mintArray.length);
+  logger.info("Length of batchified mint array: " + batchifiedMintArray.length);
 
   return batchifiedMintArray;
 }
@@ -264,8 +266,8 @@ async function mintIMXBatchArray(
     logger.info("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
       const result = await imxclient.mint(signer, element);
-      for (const user of element.users[0].tokens) {
-        await setBurnTransferToMinted(prisma, parseInt(user.id));
+      for (const token of result.results) {
+        await setStarkTokenToMinted(prisma, parseInt(token.token_id), token.tx_id);
       }
       logger.info(result);
       return { status: "success", result };
@@ -299,7 +301,7 @@ async function runIMXRegularMint(
   IMXMintingBatchSize: number,
   IMXMintingRequestDelay: number
 ) {
-  logger.info(`Checking for new IMX StarkEx mints on chain ${chainId} and collection address ${collectionAddress}...`);
+  logger.info(`Checking for new IMX StarkEx mints on chain ${chainId} and destinationCollectionAddress ${collectionAddress}...`);
   //loads the mint array which is going to be passed to the minting function
   const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
 
@@ -315,14 +317,21 @@ async function runIMXRegularMint(
   }, IMXMintingRequestDelay);
 }
 
-async function minter(chainId: number, collectionAddress: string) {
+async function minter(chain: number, collectionAddress: string) {
   const prisma = new PrismaClient();
-  if (chainId === 5000 || chainId === 5001) {
+
+  // Check if the provided chainId is valid.
+  if (!chains.hasOwnProperty(chain)) {
+    logger.info(`Invalid chain: ${chain}`);
+    throw new Error(`Invalid chain: ${chain}`);
+  }
+
+  if (chain === 5000 || chain === 5001) {
     const config = destinationChain === 5000 ? Config.PRODUCTION : Config.SANDBOX;
     const network = destinationChain === 5000 ? "production" : "sandbox";
     const imxclient = new ImmutableX(config);
     const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
-    runIMXRegularMint(imxclient, prisma, signer, chainId, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
+    runIMXRegularMint(imxclient, prisma, signer, chain, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
   } else {
     //setup Moralis
     await Moralis.start({
@@ -334,7 +343,7 @@ async function minter(chainId: number, collectionAddress: string) {
     runEVMRegularMint(
       prisma,
       signer,
-      chainId,
+      chain,
       collectionAddress,
       contractABI,
       transactionConfirmationPollingDelay,
@@ -343,6 +352,7 @@ async function minter(chainId: number, collectionAddress: string) {
       EVMMintingGasLimit
     );
   }
+
 }
 
 //IMX testnet

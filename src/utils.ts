@@ -137,10 +137,10 @@ export async function setEVMTokenToMinted(prisma: PrismaClient,  destinationToke
   }
 }
 
-export async function setStarkTokenToMinted(prisma: PrismaClient, destinationTokenId:number, mintStarkTransaction_id:number, toDestinationAddress:string): Promise<boolean> {
+export async function setStarkTokenToMinted(prisma: PrismaClient, destinationTokenId:number, mintStarkTransaction_id:number): Promise<boolean> {
   try {
     await prisma.token.update({
-      where: { originTokenId: destinationTokenId },
+      where: { destinationTokenId: destinationTokenId },
       data: { minted: true,
               mintStarkTransaction_id: mintStarkTransaction_id,
              },

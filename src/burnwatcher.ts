@@ -8,13 +8,11 @@ import { ListTransfersResponse } from "@imtbl/core-sdk";
 import logger from "./logger";
 import { getTransfersFromContract } from "./moralis";
 import {
-  EVMBlockPollingInterval,
   burnAddress,
   originChain,
   destinationChain,
   destinationCollectionAddress,
   originCollectionAddress,
-  addressMappingEnabled,
 } from "./config";
 import { tokenIDOffset as configTokenIDOffset } from "./config";
 import { addressMappingEnabled as configAddressMappingEnabled } from "./config";
@@ -477,7 +475,7 @@ async function main() {
     apiKey: process.env.MORALIS_API_KEY,
   });
   const currentBlock = await getCurrentBlock(originChain);
-  backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 39985828, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
+  backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 43538618, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
 }
 main();
 

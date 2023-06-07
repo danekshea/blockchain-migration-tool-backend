@@ -23,7 +23,7 @@ The following StarkEx origin/destination chains are supported:
 * Immutable X Sandbox
 
 # Pre-requisites
-* A deployed contract using the IMX base contracts
+* A deployed contract using the IMX base contracts(if interacting with StarkEx)
 * A Moralis API key
 * An Alchemy API key
 
@@ -79,15 +79,14 @@ Address mapping is supported where a wallet address on the origin chain can be m
 
 ## Immediate to-do
 * Add intelligent gas estimation to the EVM minting side
-* More thorough testing of token offset parameter
 * Rectify variable shadowing
 
 ## Long-term to-do
 * Improve error logging, for example a duplicate mint just puts the whole message into the message field, ideally it should break down the stack etc.
 * Improve the efficiency of the minting requests, they're currently split by unique user addresses but optimally you'd concatenate multiple token arrays with different users into a single batch
 * Add auditing to StarkEx watcher because it might miss assets due to an ordering issue with the IMX APIs
-* Add support for other EVM NaaS providers than Moralis
 * Maybe move everything into a config object rather than individual variables
+* The tool could be reworked fairly easily to process multiple origin and destination collection addresses at once, not sure it's necessary or within the scope of this project.
 
 ## License
 MIT License
