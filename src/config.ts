@@ -19,10 +19,10 @@ export const destinationCollectionAddress: string = "0x82633202e463d7a39e6c03a84
 export const burnAddress: string = "0x0000000000000000000000000000000000000000";
 
 //Enable wallet address mapping, remember that the DB table for wallet addresses is used and needs to exist.
-export const addressMappingEnabled: boolean = true;
+export const addressMappingEnabled: boolean = false;
 
 //Token ID offset, this number is added to the original token ID to get the new token ID
-export const tokenIDOffset: number = 10003;
+export const tokenIDOffset: number = 0;
 
 //Enable logging to file
 export const enableFileLogging:boolean = true;
