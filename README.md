@@ -79,6 +79,7 @@ Address mapping is supported where a wallet address on the origin chain can be m
 
 ## Immediate to-do
 * Add intelligent gas estimation to the EVM minting side
+* Improve transaction confirmaton logic, there's issues where the confirmation on Polygon PoS for example can take over 10 minutes
 * Rectify variable shadowing
 
 ## Long-term to-do

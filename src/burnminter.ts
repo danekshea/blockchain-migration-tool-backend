@@ -13,6 +13,7 @@ import {
   EVMMintingGasLimit,
   transactionConfirmationPollingDelay,
   EVMMintingRequestDelay,
+  originCollectionAddress,
 } from "./config";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
@@ -275,7 +276,7 @@ async function mintIMXBatchArray(
       logger.error("Error minting tokens for " + element.users[0].user);
       logger.error(JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (error instanceof Error) {
-        console.log(error);
+        logger.info(error);
         return { status: "error", errorMessage: error.message };
       } else {
         logger.error("An unknown error occurred.");

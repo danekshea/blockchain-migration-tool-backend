@@ -156,12 +156,17 @@ export async function setStarkTokenToMinted(prisma: PrismaClient, destinationTok
   }
 }
 
-//The Moralis API getting a transaction should, according to them, be at least 1 confirmation
+// Check to make sure that a transaction is confirmed
 export async function transactionConfirmation(txhash:string, chain:number, pollingDelay:number): Promise<boolean> {
   try {
     const txrequest:GetTransactionRequest = {transactionHash: txhash, chain: chain}
     let tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
-    while (tx === null || tx.result === null) {
+    while (tx === null || tx.result === null || tx.result.receiptStatus !== 1) {
+      if (tx !== null && tx.result !== null && tx.result.receiptStatus === 0) {
+        logger.error("Transaction " + txrequest.transactionHash + " has failed.");
+        throw new Error("Transaction has failed.");
+      }
+
       logger.info("Waiting for transaction " + txrequest.transactionHash + " to be confirmed...");
       await new Promise((r) => setTimeout(r, pollingDelay));
       tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
@@ -172,6 +177,7 @@ export async function transactionConfirmation(txhash:string, chain:number, polli
     throw new Error("Failed to fetch transaction details");
   }
 }
+
 
 export async function parseCSV(file:string): Promise<void> {
   let data: any[] = []; 
@@ -219,14 +225,3 @@ export const chains: { [key: number]: chainDetails } = {
   80001: {name: "Mumbai", shortName: "mumbai"},
   11155111: {name: "Sepolia", shortName: "sepolia"},
 }
-
-
-parseCSV("data/gog.csv");
-
-
-
-
-
-
-
-
