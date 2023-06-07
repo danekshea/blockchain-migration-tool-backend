@@ -22,7 +22,7 @@ dotenv.config();
 //Retrieves the burn transfers from a certain block range and curses through them recursively
 async function getEVMBurnTransfersByBlockRange(
   burnTransfers: NftTransfer[] = [],
-  chainId: number,
+  chain: number,
   collectionAddress: string,
   burnAddress: string,
   fromBlock: number,
@@ -34,7 +34,7 @@ async function getEVMBurnTransfersByBlockRange(
   const todayDate = new Date();
   const currentblockresponse = await Moralis.EvmApi.block.getDateToBlock({
     date: todayDate.toString(),
-    chain: chainId,
+    chain: chain,
   });
   const currentblock = currentblockresponse.result.block;
 
@@ -57,7 +57,7 @@ async function getEVMBurnTransfersByBlockRange(
   }
 
   try {
-    const response = await getTransfersFromContract(collectionAddress, chainId, fromBlock, toBlock, cursor);
+    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock, cursor);
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
@@ -77,7 +77,7 @@ async function getEVMBurnTransfersByBlockRange(
       index++;
       return await getEVMBurnTransfersByBlockRange(
         burnTransfers,
-        chainId,
+        chain,
         collectionAddress,
         burnAddress,
         fromBlock,
@@ -96,7 +96,7 @@ async function getEVMBurnTransfersByBlockRange(
     await new Promise((f) => setTimeout(f, 1000));
     return await getEVMBurnTransfersByBlockRange(
       burnTransfers,
-      chainId,
+      chain,
       collectionAddress,
       burnAddress,
       fromBlock,

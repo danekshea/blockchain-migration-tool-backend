@@ -32,7 +32,7 @@ export interface TokenTransferResponse {
 }
 
 export interface NftTransfer {
-  chainId: number;
+  chain: number;
   tokenAddress: string;
   tokenId: number;
   fromAddress: string;

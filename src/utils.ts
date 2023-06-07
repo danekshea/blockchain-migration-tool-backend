@@ -6,7 +6,11 @@ import * as dotenv from 'dotenv';
 import { EvmNftTransfer, GetTransactionRequest } from '@moralisweb3/common-evm-utils';
 import { NftTransfer, burn, chainDetails } from './type';
 import logger from './logger';
+import * as fs from 'fs';
+const csv = require('csv-parser');
 dotenv.config();
+
+
 
 export async function getSigner(network: string, privateKey: string):Promise<Wallet> {
   if (!privateKey) throw new Error('Private key is required.');
@@ -21,12 +25,12 @@ export async function getSigner(network: string, privateKey: string):Promise<Wal
 }
 
 //Gets the current block
-export async function getCurrentBlock(chainId: number): Promise<number> {
+export async function getCurrentBlock(chain: number): Promise<number> {
   try {
     const todayDate = new Date();
     const currentBlockResponse = await Moralis.EvmApi.block.getDateToBlock({
       date: todayDate.toString(),
-      chain: chainId,
+      chain: chain,
     });
     const currentBlock = currentBlockResponse.result.block;
     return currentBlock;
@@ -76,7 +80,7 @@ async function findDBMinMax(prisma: PrismaClient):Promise<[number, number]> {
 
 export function convertEvmNftTransferToBurn(evmt: NftTransfer): burn {
   return {
-    chain: evmt.chainId, 
+    chain: evmt.chain, 
     timestamp: evmt.blockTimestamp,
     blockNumber: evmt.blockNumber,
     transactionHash: evmt.transactionHash,
@@ -91,10 +95,10 @@ export function convertEvmNftTransferToBurnList(evmtList: NftTransfer[]): burn[]
   return evmtList.map(convertEvmNftTransferToBurn);
 }
 
-export function convertIMXTransferToBurn(transfer: Transfer, chainId:number): burn {
+export function convertIMXTransferToBurn(transfer: Transfer, chain:number): burn {
   if(transfer.token.data.token_address == null || transfer.token.data.token_id == null) throw new Error("Token address or token id is null");
   return {
-    chain: chainId, // Assuming Ethereum as the chain; update accordingly
+    chain: chain, // Assuming Ethereum as the chain; update accordingly
     blockNumber: undefined, // Assuming no blockNumber available; update accordingly
     timestamp: transfer.timestamp ? new Date(transfer.timestamp) : new Date(),
     transactionHash: undefined, // Assuming no transactionHash available; update accordingly
@@ -106,8 +110,8 @@ export function convertIMXTransferToBurn(transfer: Transfer, chainId:number): bu
   };
 }
 
-export function convertIMXTransfersToBurns(transfers: Transfer[], chainId: number): burn[] {
-  return transfers.map(transfer => convertIMXTransferToBurn(transfer, chainId));
+export function convertIMXTransfersToBurns(transfers: Transfer[], chain: number): burn[] {
+  return transfers.map(transfer => convertIMXTransferToBurn(transfer, chain));
 }
 
 export async function getTokensFromDB(prisma: PrismaClient): Promise<Token[]> {
@@ -153,9 +157,9 @@ export async function setStarkTokenToMinted(prisma: PrismaClient, destinationTok
 }
 
 //The Moralis API getting a transaction should, according to them, be at least 1 confirmation
-export async function transactionConfirmation(txhash:string, chainId:number, pollingDelay:number): Promise<boolean> {
+export async function transactionConfirmation(txhash:string, chain:number, pollingDelay:number): Promise<boolean> {
   try {
-    const txrequest:GetTransactionRequest = {transactionHash: txhash, chain: chainId}
+    const txrequest:GetTransactionRequest = {transactionHash: txhash, chain: chain}
     let tx = await Moralis.EvmApi.transaction.getTransaction(txrequest);
     while (tx === null || tx.result === null) {
       logger.info("Waiting for transaction " + txrequest.transactionHash + " to be confirmed...");
@@ -168,6 +172,35 @@ export async function transactionConfirmation(txhash:string, chainId:number, pol
     throw new Error("Failed to fetch transaction details");
   }
 }
+
+export async function parseCSV(file:string): Promise<void> {
+  let data: any[] = []; 
+
+  fs.createReadStream(file)
+    .pipe(csv())
+    .on('data', (row:any) => {
+        data.push({
+            ContractAddress: row['Contract Address'],
+            ID: row['ID'],
+            OwnerAddress: row['Owner Address'],
+            Status: row['Status'],
+            URI: row['URI'],
+            Name: row['Name'],
+            Description: row['Description'],
+            ImageURL: row['Image URL'],
+            LastMetadataRefreshTime: row['Last Metadata Refresh Time'],
+            LastMetadataRefreshStatusCode: row['Last Metadata Refresh Status Code'],
+            LastUpdateTransactionHash: row['Last Update Transaction Hash'],
+            LastUpdateBlockNumber: row['Last Update Block Number'],
+            TokenID: row['Token ID'],
+            Blueprint: row['Blueprint'],
+        });
+    })
+    .on('end', () => {
+        console.log(data);
+    });
+  }
+
 
 //Key value pairs for the different chains, contains chain details
 export const chains: { [key: number]: chainDetails } = {
@@ -187,6 +220,8 @@ export const chains: { [key: number]: chainDetails } = {
   11155111: {name: "Sepolia", shortName: "sepolia"},
 }
 
+
+parseCSV("data/gog.csv");
 
 
 

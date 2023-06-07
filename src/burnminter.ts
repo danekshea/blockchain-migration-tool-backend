@@ -296,12 +296,12 @@ async function runIMXRegularMint(
   imxclient: ImmutableX,
   prisma: PrismaClient,
   signer: Signer,
-  chainId: number,
+  chain: number,
   collectionAddress: string,
   IMXMintingBatchSize: number,
   IMXMintingRequestDelay: number
 ) {
-  logger.info(`Checking for new IMX StarkEx mints on chain ${chainId} and destinationCollectionAddress ${collectionAddress}...`);
+  logger.info(`Checking for new IMX StarkEx mints on chain ${chain} and destinationCollectionAddress ${collectionAddress}...`);
   //loads the mint array which is going to be passed to the minting function
   const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
 
@@ -313,14 +313,14 @@ async function runIMXRegularMint(
   //Delay before running again
   //Delay before running again
   setTimeout(() => {
-    runIMXRegularMint(imxclient, prisma, signer, chainId, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
+    runIMXRegularMint(imxclient, prisma, signer, chain, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
   }, IMXMintingRequestDelay);
 }
 
 async function minter(chain: number, collectionAddress: string) {
   const prisma = new PrismaClient();
 
-  // Check if the provided chainId is valid.
+  // Check if the provided chain is valid.
   if (!chains.hasOwnProperty(chain)) {
     logger.info(`Invalid chain: ${chain}`);
     throw new Error(`Invalid chain: ${chain}`);

@@ -6,7 +6,7 @@ import logger from "./logger";
 
 export async function getTransfersFromContract(
   collectionAddress:string,
-  chainId:number,
+  chain:number,
   fromBlock:number,
   toBlock:number,
   cursor:string | undefined
@@ -14,7 +14,7 @@ export async function getTransfersFromContract(
 ): Promise<MoralisGetNFTContractTransfersResponse> {
   const pagePointerQueryString = cursor ? `cursor=${cursor}` : "";
 
-  const url = `https://deep-index.moralis.io/api/v2/nft/${collectionAddress}/transfers?chain=${chains[chainId].shortName}&to_block=${toBlock}&from_block=${fromBlock}&format=decimal&limit=5&${pagePointerQueryString}`;
+  const url = `https://deep-index.moralis.io/api/v2/nft/${collectionAddress}/transfers?chain=${chains[chain].shortName}&to_block=${toBlock}&from_block=${fromBlock}&format=decimal&limit=5&${pagePointerQueryString}`;
 
   try {
     const { status, data } = await axios.get<TokenTransferResponse>(url, {
@@ -25,7 +25,7 @@ export async function getTransfersFromContract(
     });
 
     const transfers: NftTransfer[] = data.result.map((item: any) => ({
-      chainId: chainId,
+      chain: chain,
       tokenAddress: item.token_address.toLowerCase(),
       tokenId: parseInt(item.token_id),
       fromAddress: item.from_address.toLowerCase(),
