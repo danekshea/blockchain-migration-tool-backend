@@ -347,7 +347,7 @@ async function monitorIMXBurnTransfers(
 }
 
 //Loads the burn transfers into the database
-async function loadBurnTransfers(
+export async function loadBurnTransfers(
   prisma: PrismaClient,
   destinationChain: number,
   destinationCollectionAddress: string,

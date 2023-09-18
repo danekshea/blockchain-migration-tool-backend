@@ -51,3 +51,20 @@ export interface chainDetails {
   name: string;
   shortName: string;
 }
+
+interface IMXCSVData {
+  ContractAddress: string;
+  ID: string;
+  OwnerAddress: string;
+  Status: string;
+  URI: string;
+  Name: string;
+  Description: string;
+  ImageURL: string;
+  LastMetadataRefreshTime: string;
+  LastMetadataRefreshStatusCode: string;
+  LastUpdateTransactionHash: string;
+  LastUpdateBlockNumber: string;
+  TokenID: string;
+  Blueprint: string;
+}
