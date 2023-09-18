@@ -227,6 +227,7 @@ export const chains: { [key: number]: chainDetails } = {
   250: { name: "Fantom", shortName: "fantom" },
   5000: { name: "ImmutableX", shortName: "imx" },
   5001: { name: "ImmutableX Testnet", shortName: "imx testnet" },
+  13472: { name: "Immutable zkEVM Testnet", shortName: "imx zkevm testnet" },
   42161: { name: "Arbitrum", shortName: "arbitrum" },
   43114: { name: "Avalanche", shortName: "avalanche" },
   //polygon testnet
