@@ -76,6 +76,30 @@ async function findDBMinMax(prisma: PrismaClient): Promise<[number, number]> {
   }
 }
 
+export async function convertTokensToRequests(tokens: Token[]) {
+  const groupedByAddress: { [address: string]: number[] } = {};
+
+  tokens.forEach((token) => {
+    // Ensure the token has a destination address before proceeding.
+    if (token.toDestinationWalletAddress) {
+      // If the address is not yet a key in groupedByAddress, add it with the token ID.
+      if (!groupedByAddress[token.toDestinationWalletAddress]) {
+        groupedByAddress[token.toDestinationWalletAddress] = [];
+      }
+      // Push the token ID to the array of IDs for this address.
+      groupedByAddress[token.toDestinationWalletAddress].push(token.destinationTokenId);
+    }
+  });
+
+  // Convert the object to the desired array format.
+  const requests = Object.keys(groupedByAddress).map((address) => ({
+    to: address,
+    tokenIds: groupedByAddress[address],
+  }));
+
+  return requests;
+}
+
 export function convertEvmNftTransferToBurn(evmt: NftTransfer): burn {
   return {
     chain: evmt.chain,
@@ -234,18 +258,3 @@ export const chains: { [key: number]: chainDetails } = {
   80001: { name: "Mumbai", shortName: "mumbai" },
   11155111: { name: "Sepolia", shortName: "sepolia" },
 };
-
-async function main() {
-  const data = await parseCSV("data/gog.csv");
-  const burns = transformToBurn(data);
-  const prisma = new PrismaClient();
-  const result = await loadBurnTransfers(
-    prisma,
-    137,
-    "0x0551b1C0B01928Ab22A565b58427FF0176De883C",
-    0,
-    false,
-    burns);
-  console.log(result);
-}
-main();

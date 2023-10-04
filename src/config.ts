@@ -1,28 +1,28 @@
 //Basic settings
 
 //Supported chain ids are in the blockchain.ts file
-export const originChain: number = 137;
+export const originChain: number = 80001;
 
 //Destination chaind ID, have a look in blockchain.ts but IMX mainnet is 5000, sandbox is 5001
-export const destinationChain: number = 5001;
+export const destinationChain: number = 13472;
 
 //Collection address that items are burnt from
-export const originCollectionAddress: string = "0x0551b1C0B01928Ab22A565b58427FF0176De883C";
+export const originCollectionAddress: string = "0x04C707b1E99c301BF86eF9940b3AeF7090E52D4D";
 
 //Collection address that migrated tokens are minted to
-export const destinationCollectionAddress: string = "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3";
+export const destinationCollectionAddress: string = "0x5adF615aD4252494cd46D01D295c5ddE7F9Df5f3";
 
 
 //General settings
 
 //Address to look for transfers to which are considered a burn
-export const burnAddress: string = "0x0000000000000000000000000000000000000000";
+export const burnAddress: string = "0x000000000000000000000000000000000000dead";
 
 //Enable wallet address mapping, remember that the DB table for wallet addresses is used and needs to exist.
 export const addressMappingEnabled: boolean = false;
 
 //Token ID offset, this number is added to the original token ID to get the new token ID
-export const tokenIDOffset: number = 10009;
+export const tokenIDOffset: number = 0;
 
 //Enable logging to file
 export const enableFileLogging:boolean = true;

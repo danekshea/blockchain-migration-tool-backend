@@ -57,7 +57,7 @@ async function getEVMBurnTransfersByBlockRange(
   }
 
   try {
-    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock, cursor);
+    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock-1, cursor);
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
@@ -445,7 +445,9 @@ async function watcher(
       apiKey: process.env.MORALIS_API_KEY,
     });
 
-    const currentBlock = await getCurrentBlock(originChain);
+    //const currentBlock = await getCurrentBlock(originChain);
+    const currentBlock = 40601338;
+
     monitorEVMBurnTransfers(
       prisma,
       originChain,
@@ -461,7 +463,7 @@ async function watcher(
   }
 }
 
-//watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
+watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
 
 //Polygon mainnet
 //watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");
@@ -470,15 +472,15 @@ async function watcher(
 //watcher(5001, "0x82633202e463d7a39e6c03a843f0f4e83b7e9aa3", "0x0000000000000000000000000000000000000000");
 
 //Test for backfilling
-async function main() {
-  const prisma = new PrismaClient();
-  await Moralis.start({
-    apiKey: process.env.MORALIS_API_KEY,
-  });
-  const currentBlock = await getCurrentBlock(originChain);
-  backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 43538618, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
-}
-main();
+// async function main() {
+//   const prisma = new PrismaClient();
+//   await Moralis.start({
+//     apiKey: process.env.MORALIS_API_KEY,
+//   });
+//   const currentBlock = await getCurrentBlock(originChain);
+//   backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, 40230838, currentBlock, 100000, configTokenIDOffset, configAddressMappingEnabled);
+// }
+// main();
 
 //Test monitorIMXBurnTransfers
 // async function main() {
@@ -502,15 +504,15 @@ main();
 //   const currentBlock = await getCurrentBlock(137);
 //   const result = await getEVMBurnTransfersByBlockRange(
 //     [],
-//     137,
-//     "0x0551b1C0B01928Ab22A565b58427FF0176De883C",
-//     "0x0000000000000000000000000000000000000000",
-//     40008245,
-//     currentBlock
+//     originChain,
+//     originCollectionAddress,
+//     burnAddress,
+//     40601348,
+//     40601353
 //   );
-//   // console.log(result);
-//   // for (const element of result) {
-//   //   console.log(element.tokenAddress);
-//   // }
+//   console.log(result);
+//   for (const element of result) {
+//     console.log(element.tokenAddress);
+//   }
 // }
 // main();

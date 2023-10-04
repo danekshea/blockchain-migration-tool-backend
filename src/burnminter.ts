@@ -16,8 +16,20 @@ import {
   originCollectionAddress,
 } from "./config";
 import * as dotenv from "dotenv";
+import { getDefaultProvider, Wallet } from "ethers"; // ethers v5
+import { Provider, TransactionResponse } from "@ethersproject/providers"; // ethers v5
+import { ERC721Client } from "@imtbl/zkevm-contracts";
 import * as fs from "fs";
-import { getTokensFromDB, getSigner, isIMXRegistered, setEVMTokenToMinted, setStarkTokenToMinted, transactionConfirmation, chains } from "./utils";
+import {
+  getTokensFromDB,
+  getSigner,
+  isIMXRegistered,
+  setEVMTokenToMinted,
+  setStarkTokenToMinted,
+  transactionConfirmation,
+  chains,
+  convertTokensToRequests,
+} from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";
@@ -94,6 +106,76 @@ async function mintEVMAssets(
   }
 }
 
+async function mintIMXEVMAssets(
+  prisma: PrismaClient,
+  wallet: Wallet,
+  tokens: Token[],
+  destinationChain: number,
+  destinationCollectionAddress: string
+): Promise<TransactionResponse> {
+  const contract = new ERC721Client(destinationCollectionAddress);
+
+  const provider = wallet.provider;
+  // We can use the read function hasRole to check if the intended signer
+  // has sufficient permissions to mint before we send the transaction
+  const minterRole = await contract.MINTER_ROLE(provider);
+  const hasMinterRole = await contract.hasRole(provider, minterRole, wallet.address);
+
+  //   const testtx = await contract.populateGrantMinterRole(wallet.address);
+  //   console.log("minting role grant:", testtx);
+
+  //   const tx = await wallet.sendTransaction(testtx);
+
+  console.log(`minting role is now ` + (await contract.MINTER_ROLE(provider)));
+
+  if (!hasMinterRole) {
+    // Handle scenario without permissions...
+    console.log("Account doesnt have permissions to mint.");
+    return Promise.reject(new Error("Account doesnt have permissions to mint."));
+  }
+
+  const requests = await convertTokensToRequests(tokens);
+
+  console.log(requests);
+
+  const populatedTransaction = await contract.populateMintBatch(requests);
+  const result = await wallet.sendTransaction(populatedTransaction);
+  console.log(result); // To get the TransactionResponse value
+  for (const token of tokens) {
+    await setEVMTokenToMinted(prisma, token.destinationTokenId, result.hash);
+  }
+  return result;
+}
+
+async function runIMXEVMRegularMint(
+  prisma: PrismaClient,
+  wallet: Wallet,
+  destinationChain: number,
+  destinationCollectionAddress: string,
+  EVMMintingRequestDelay: number,
+) {
+  logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
+  const tokens = await getTokensFromDB(prisma);
+  if(tokens.length > 0) {
+    await mintIMXEVMAssets(
+      prisma,
+      wallet,
+      tokens,
+      destinationChain,
+      destinationCollectionAddress,
+    );
+  }
+
+  await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
+  await runIMXEVMRegularMint(
+    prisma,
+    wallet,
+    destinationChain,
+    destinationCollectionAddress,
+    EVMMintingRequestDelay,
+  );
+}
+
 async function runEVMRegularMint(
   prisma: PrismaClient,
   signer: Signer,
@@ -141,7 +223,7 @@ async function loadIMXUserMintArray(imxclient: ImmutableX, prisma: PrismaClient,
   //Go through each token and add an entry for each user or add to an additional user entry, mint requests are broken down by user
   let tokensArray: { [receiverAddress: string]: MintTokenDataV2[] } = {};
   for (const token of tokens) {
-    if(token.destinationCollectionAddress === collectionAddress) {
+    if (token.destinationCollectionAddress === collectionAddress) {
       //If the user already exists in the array then add the token to the array, otherwise create a new key entry
       if (tokensArray[token.toDestinationWalletAddress]) {
         tokensArray[token.toDestinationWalletAddress].push({
@@ -333,6 +415,13 @@ async function minter(chain: number, collectionAddress: string) {
     const imxclient = new ImmutableX(config);
     const signer = await getSigner(network, process.env.MINTER_PRIVATE_KEY!);
     runIMXRegularMint(imxclient, prisma, signer, chain, collectionAddress, IMXMintingBatchSize, IMXMintingRequestDelay);
+  } else if (chain === 13472) {
+    //If it's IMX zkEVM
+    const testProvider = getDefaultProvider("https://rpc.testnet.immutable.com");
+    const testWallet = new ethers.Wallet(process.env.MINTER_PRIVATE_KEY!, testProvider);
+    const prisma = new PrismaClient();
+
+    runIMXEVMRegularMint(prisma, testWallet, destinationChain, destinationCollectionAddress, EVMMintingRequestDelay);
   } else {
     //setup Moralis
     await Moralis.start({
@@ -353,10 +442,8 @@ async function minter(chain: number, collectionAddress: string) {
       EVMMintingGasLimit
     );
   }
-
 }
 
-//IMX testnet
 minter(destinationChain, destinationCollectionAddress);
 
 //IMX testnet
