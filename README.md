@@ -15,6 +15,7 @@ The following EVM origin/destination chains are supported:
 * Cronos
 * ETH L1
 * Fantom
+* Immutable zkEVM testnet
 * Immutable zkEVM(coming soon)
 * Polygon PoS
 
