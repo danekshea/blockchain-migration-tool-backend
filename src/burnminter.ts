@@ -116,17 +116,9 @@ async function mintIMXEVMAssets(
   const contract = new ERC721Client(destinationCollectionAddress);
 
   const provider = wallet.provider;
-  // We can use the read function hasRole to check if the intended signer
-  // has sufficient permissions to mint before we send the transaction
+  //Check if the wallet has the minter role
   const minterRole = await contract.MINTER_ROLE(provider);
   const hasMinterRole = await contract.hasRole(provider, minterRole, wallet.address);
-
-  //   const testtx = await contract.populateGrantMinterRole(wallet.address);
-  //   console.log("minting role grant:", testtx);
-
-  //   const tx = await wallet.sendTransaction(testtx);
-
-  console.log(`minting role is now ` + (await contract.MINTER_ROLE(provider)));
 
   if (!hasMinterRole) {
     // Handle scenario without permissions...
@@ -134,10 +126,10 @@ async function mintIMXEVMAssets(
     return Promise.reject(new Error("Account doesnt have permissions to mint."));
   }
 
+  //Convert the tokens into the IMX request format
   const requests = await convertTokensToRequests(tokens);
 
-  console.log(requests);
-
+  //Populate the transaction and send it off
   const populatedTransaction = await contract.populateMintBatch(requests);
   const result = await wallet.sendTransaction(populatedTransaction);
   console.log(result); // To get the TransactionResponse value

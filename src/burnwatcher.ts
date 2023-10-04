@@ -446,7 +446,7 @@ async function watcher(
     });
 
     //const currentBlock = await getCurrentBlock(originChain);
-    const currentBlock = 40601338;
+    const currentBlock = 40827812;
 
     monitorEVMBurnTransfers(
       prisma,
