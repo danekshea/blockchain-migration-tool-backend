@@ -1,0 +1,21 @@
+# Use an official Node runtime as a parent image
+FROM node:16
+
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy package.json and package-lock.json
+COPY package*.json ./
+
+# Install any dependencies
+RUN npm install
+
+# Copy the rest of your application's code and the .env file
+COPY . .
+COPY .env .env
+
+# Build the TypeScript files
+RUN npm run build
+
+# Command to run the application
+CMD [ "npm", "run", "minter" ]

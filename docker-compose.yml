@@ -1,0 +1,31 @@
+version: '3'
+services:
+  db:
+    image: postgres:latest
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: migration
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.watcher
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+  minter:
+    build:
+      context: .
+      dockerfile: Dockerfile.minter
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+volumes:
+  db-data:
