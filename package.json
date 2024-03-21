@@ -10,8 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@imtbl/contracts": "^2.2.3",
     "@imtbl/core-sdk": "^1.0.1",
-    "@imtbl/zkevm-contracts": "^1.2.3",
+    "@imtbl/sdk": "^1.23.3",
     "@moralisweb3/common-evm-utils": "^2.22.0",
     "@prisma/client": "^4.15.0",
     "csv-parser": "^3.0.0",

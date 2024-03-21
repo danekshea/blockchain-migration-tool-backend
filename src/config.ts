@@ -1,3 +1,5 @@
+import { config } from "@imtbl/sdk";
+
 //Basic settings
 
 //Supported chain ids are in the blockchain.ts file
@@ -10,8 +12,19 @@ export const destinationChain: number = 13472;
 export const originCollectionAddress: string = "0x04C707b1E99c301BF86eF9940b3AeF7090E52D4D";
 
 //Collection address that migrated tokens are minted to
-export const destinationCollectionAddress: string = "0x5adF615aD4252494cd46D01D295c5ddE7F9Df5f3";
+export const destinationCollectionAddress: string = "0xa8d248fa82e097df14b3bcda5515af97d4a62365";
 
+//https://api.immutable.com for mainnet, https://api.sandbox.immutable.com for sandbox
+export const IMX_API_URL: string = "https://api.sandbox.immutable.com";
+
+//Environment used for the minting API configuration, config.Environment.MAINNET for mainnet, config.Environment.SANDBOX for sandbox
+export const environment = config.Environment.SANDBOX;
+
+//Address of the minting wallet for the Immutable minting API on sandbox
+export const mintingAPIAddressSandbox: string = "0x9CcFbBaF5509B1a03826447EaFf9a0d1051Ad0CF";
+
+//Address of the minting wallet for the Immutable minting API on mainnet
+export const mintingAPIAddressMainnet: string = "0xbb7ee21AAaF65a1ba9B05dEe234c5603C498939E";
 
 //General settings
 
@@ -25,8 +38,7 @@ export const addressMappingEnabled: boolean = false;
 export const tokenIDOffset: number = 0;
 
 //Enable logging to file
-export const enableFileLogging:boolean = true;
-
+export const enableFileLogging: boolean = true;
 
 //IMX settings
 
@@ -42,7 +54,6 @@ export const IMXMintingBatchDelay: number = 0;
 //Delay in (ms) between each minting request
 export const IMXMintingRequestDelay: number = 5000;
 
-
 //EVM settings
 
 //ABI for the minting contract on the EVM side
@@ -51,16 +62,16 @@ export const contractABI: string = JSON.parse(
 );
 
 //Time to wait between polling for transaction confirmation during mints on EVM chains, in milliseconds
-export const transactionConfirmationPollingDelay:number = 3000;
+export const transactionConfirmationPollingDelay: number = 3000;
 
 //The offset at which blocks are polled for on EVM chains in units of blocks. 5 means poll when the watcher is 5 blocks behind.
-export const EVMBlockPollingInterval:number = 5;
+export const EVMBlockPollingInterval: number = 5;
 
 //Delays between reading from the DB and attempting to mint on EVM chains, in milliseconds
-export const EVMMintingRequestDelay:number = 1000;
+export const EVMMintingRequestDelay: number = 1000;
 
 //Gas price for mints on EVM chains, in gwei
-export const EVMMintingGasPrice:number = 280;
+export const EVMMintingGasPrice: number = 280;
 
 //Gas limit for mints on EVM chains
-export const EVMMintingGasLimit:number = 146000;
+export const EVMMintingGasLimit: number = 146000;

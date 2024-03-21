@@ -251,7 +251,8 @@ export const chains: { [key: number]: chainDetails } = {
   250: { name: "Fantom", shortName: "fantom" },
   5000: { name: "ImmutableX", shortName: "imx" },
   5001: { name: "ImmutableX Testnet", shortName: "imx testnet" },
-  13472: { name: "Immutable zkEVM Testnet", shortName: "imx zkevm testnet" },
+  13473: { name: "Immutable zkEVM Testnet", shortName: "imtbl-zkevm-testnet" },
+  13371: { name: "Immutable zkEVM Mainnet", shortName: "imtbl-zkevm-mainnet" },
   42161: { name: "Arbitrum", shortName: "arbitrum" },
   43114: { name: "Avalanche", shortName: "avalanche" },
   //polygon testnet

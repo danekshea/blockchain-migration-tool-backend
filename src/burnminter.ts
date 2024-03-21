@@ -14,11 +14,14 @@ import {
   transactionConfirmationPollingDelay,
   EVMMintingRequestDelay,
   originCollectionAddress,
+  IMX_API_URL,
 } from "./config";
 import * as dotenv from "dotenv";
 import { getDefaultProvider, Wallet } from "ethers"; // ethers v5
 import { Provider, TransactionResponse } from "@ethersproject/providers"; // ethers v5
-import { ERC721Client } from "@imtbl/zkevm-contracts";
+import { ERC721Client } from "@imtbl/contracts";
+import { blockchainData, config as sdkConfig } from "@imtbl/sdk";
+import { Types } from "@imtbl/sdk/dist/blockchain_data";
 import * as fs from "fs";
 import {
   getTokensFromDB,
@@ -106,7 +109,7 @@ async function mintEVMAssets(
   }
 }
 
-async function mintIMXEVMAssets(
+async function mintIMXEVMAssetsViaMethodCall(
   prisma: PrismaClient,
   wallet: Wallet,
   tokens: Token[],
@@ -139,33 +142,72 @@ async function mintIMXEVMAssets(
   return result;
 }
 
+async function mintIMXEVMAssetsViaMintingAPI(prisma: PrismaClient, tokens: Token[], destinationChain: number, destinationCollectionAddress: string) {
+  //Remember to grant the minting role to the mintingAPIAddress
+  const config: blockchainData.BlockchainDataModuleConfiguration = {
+    baseConfig: new sdkConfig.ImmutableConfiguration({
+      environment: sdkConfig.Environment.SANDBOX,
+    }),
+    overrides: {
+      basePath: IMX_API_URL,
+      headers: {
+        "x-immutable-api-key": process.env.IMMUTABLE_API_KEY!,
+      },
+    },
+  };
+
+  const client = new blockchainData.BlockchainData(config);
+  //generate UUID for the mint request
+
+  // const response = await client.createMintRequest({
+  //   chainName: chains[destinationChain].shortName,
+  //   contractAddress: destinationCollectionAddress,
+  //   createMintRequestRequest: {
+  //     assets: [
+  //       {
+  //         owner_address: tokens[0].toDestinationWalletAddress,
+  //         reference_id: "10",
+  //         //Remove token_id line if you want to batch mint
+  //         token_id: tokens[0].destinationTokenId.toString(),
+  //         metadata: {
+  //           name: "Amar Gambit",
+  //           description: null,
+  //           image: "https://raw.githubusercontent.com/danekshea/imx-zkevm-testing-kit/master/data/chessnfts/images/1.svg",
+  //           animation_url: null,
+  //           youtube_url: null,
+  //           attributes: [
+  //             {
+  //               trait_type: "eco",
+  //               value: "A00",
+  //             },
+  //             {
+  //               trait_type: "FEN",
+  //               value: "rn1qkbnr/ppp2ppp/8/3p4/5p2/6PB/PPPPP2P/RNBQK2R w KQkq - 0 5",
+  //             },
+  //           ],
+  //         },
+  //       },
+  //     ],
+  //   },
+  // });
+  // return response;
+}
+
 async function runIMXEVMRegularMint(
   prisma: PrismaClient,
   wallet: Wallet,
   destinationChain: number,
   destinationCollectionAddress: string,
-  EVMMintingRequestDelay: number,
+  EVMMintingRequestDelay: number
 ) {
   logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
   const tokens = await getTokensFromDB(prisma);
-  if(tokens.length > 0) {
-    await mintIMXEVMAssets(
-      prisma,
-      wallet,
-      tokens,
-      destinationChain,
-      destinationCollectionAddress,
-    );
+  if (tokens.length > 0) {
+    await mintIMXEVMAssetsViaMethodCall(prisma, wallet, tokens, destinationChain, destinationCollectionAddress);
   }
 
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  await runIMXEVMRegularMint(
-    prisma,
-    wallet,
-    destinationChain,
-    destinationCollectionAddress,
-    EVMMintingRequestDelay,
-  );
+  await runIMXEVMRegularMint(prisma, wallet, destinationChain, destinationCollectionAddress, EVMMintingRequestDelay);
 }
 
 async function runEVMRegularMint(
@@ -436,13 +478,22 @@ async function minter(chain: number, collectionAddress: string) {
   }
 }
 
-minter(destinationChain, destinationCollectionAddress);
+//minter(destinationChain, destinationCollectionAddress);
 
 //IMX testnet
 //minter(5001, destinationCollectionAddress);
 
 //Polygon mainnet
 //minter(137, originCollectionAddress);
+
+//Test IMX mint via minting API
+async function testMintingViaAPI() {
+  const prisma = new PrismaClient();
+  const tokens: any[] = [];
+  const result = await mintIMXEVMAssetsViaMintingAPI(prisma, tokens, 13473, "0xa8d248fa82e097df14b3bcda5515af97d4a62365");
+  console.log(result);
+}
+testMintingViaAPI();
 
 //Test loadIMXUserMintArray
 // async function loadIMXUserMintArrayTest() {

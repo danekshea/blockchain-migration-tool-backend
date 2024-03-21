@@ -20,6 +20,7 @@ model Token {
   burnTimestamp DateTime?
   burnEVMTransactionHash String?
   mintEVMTransactionHash String?
+  mintUUID String?
   burnStarkTransaction_id Int?
   mintStarkTransaction_id Int?
   originCollectionAddress String
