@@ -20,16 +20,7 @@ import { getDefaultProvider, Wallet } from "ethers"; // ethers v5
 import { Provider, TransactionResponse } from "@ethersproject/providers"; // ethers v5
 import { ERC721Client } from "@imtbl/zkevm-contracts";
 import * as fs from "fs";
-import {
-  getTokensFromDB,
-  getSigner,
-  isIMXRegistered,
-  setEVMTokenToMinted,
-  setStarkTokenToMinted,
-  transactionConfirmation,
-  chains,
-  convertTokensToRequests,
-} from "./utils";
+import { getTokensFromDB, getSigner, isIMXRegistered, setEVMTokenToMinted, setStarkTokenToMinted, transactionConfirmation, chains, convertTokensToRequests, generateUUID } from "./utils";
 import { ethers, Contract, Signer } from "ethers";
 import { GetTransactionRequest } from "@moralisweb3/common-evm-utils";
 import { MintRequestWithoutAuth, MintResult } from "./type";
@@ -37,15 +28,7 @@ import logger from "./logger";
 dotenv.config();
 
 //Mint an EVM asset
-async function mintEVMAsset(
-  signer: Signer,
-  destinationCollectionAddress: string,
-  to: string,
-  destinationTokenId: number,
-  contractABI: string,
-  EVMMintingGasPrice: number,
-  EVMMintingGasLimit: number
-): Promise<string> {
+async function mintEVMAsset(signer: Signer, destinationCollectionAddress: string, to: string, destinationTokenId: number, contractABI: string, EVMMintingGasPrice: number, EVMMintingGasLimit: number): Promise<string> {
   try {
     const EVMMintingGasPriceParam = ethers.utils.parseUnits(EVMMintingGasPrice.toString(), "gwei");
 
@@ -80,15 +63,7 @@ async function mintEVMAssets(
   for (const token of tokens) {
     try {
       logger.info(`Attempting to mint token:\n` + JSON.stringify(token, null, 2));
-      const txhash = await mintEVMAsset(
-        signer,
-        destinationCollectionAddress,
-        token.toDestinationWalletAddress,
-        token.destinationTokenId,
-        contractABI,
-        EVMMintingGasPrice,
-        gasLimit
-      );
+      const txhash = await mintEVMAsset(signer, destinationCollectionAddress, token.toDestinationWalletAddress, token.destinationTokenId, contractABI, EVMMintingGasPrice, gasLimit);
 
       logger.info("Transaction hash: " + txhash);
 
@@ -106,13 +81,7 @@ async function mintEVMAssets(
   }
 }
 
-async function mintIMXEVMAssets(
-  prisma: PrismaClient,
-  wallet: Wallet,
-  tokens: Token[],
-  destinationChain: number,
-  destinationCollectionAddress: string
-): Promise<TransactionResponse> {
+async function mintIMXEVMAssets(prisma: PrismaClient, wallet: Wallet, tokens: Token[], destinationChain: number, destinationCollectionAddress: string): Promise<TransactionResponse> {
   const contract = new ERC721Client(destinationCollectionAddress);
 
   const provider = wallet.provider;
@@ -139,33 +108,89 @@ async function mintIMXEVMAssets(
   return result;
 }
 
-async function runIMXEVMRegularMint(
-  prisma: PrismaClient,
-  wallet: Wallet,
-  destinationChain: number,
-  destinationCollectionAddress: string,
-  EVMMintingRequestDelay: number,
-) {
+async function mintIMXEVMAssetsViaMintingAPI(prisma: PrismaClient, tokens: Token[], destinationChain: number, destinationCollectionAddress: string) {
+  //Remember to grant the minting role to the mintingAPIAddress
+  const config: blockchainData.BlockchainDataModuleConfiguration = {
+    baseConfig: new sdkConfig.ImmutableConfiguration({
+      environment: sdkConfig.Environment.SANDBOX,
+    }),
+    overrides: {
+      basePath: IMX_API_URL,
+      headers: {
+        "x-immutable-api-key": process.env.IMMUTABLE_API_KEY!,
+      },
+    },
+  };
+
+  const client = new blockchainData.BlockchainData(config);
+
+  const assetsArray = [
+    {
+      owner_address: tokens[0].toDestinationWalletAddress,
+      reference_id: generateUUID(),
+      //Remove token_id line if you want to batch mint
+      token_id: tokens[0].destinationTokenId.toString(),
+      metadata: {
+        name: "Amar Gambit",
+        description: null,
+        image: "https://raw.githubusercontent.com/danekshea/imx-zkevm-testing-kit/master/data/chessnfts/images/1.svg",
+        animation_url: null,
+        youtube_url: null,
+        attributes: [
+          {
+            trait_type: "eco",
+            value: "A00",
+          },
+          {
+            trait_type: "FEN",
+            value: "rn1qkbnr/ppp2ppp/8/3p4/5p2/6PB/PPPPP2P/RNBQK2R w KQkq - 0 5",
+          },
+        ],
+      },
+    },
+  ];
+
+  //Create an array of the UUIDs in assetsArray
+  const uuids = assetsArray.map((asset) => asset.reference_id);
+
+  console.log(uuids);
+
+  const successfulUUIDs = [];
+
+  for (const uuid of uuids) {
+    const response = await client.getMintRequest({
+      chainName: chains[destinationChain].shortName,
+      contractAddress: destinationCollectionAddress,
+      referenceId: uuid,
+    });
+
+    if (response.result[0].status === "succeeded") {
+      successfulUUIDs.push(uuid);
+    }
+  }
+
+  // const response = await client.createMintRequest({
+  //   chainName: chains[destinationChain].shortName,
+  //   contractAddress: destinationCollectionAddress,
+  //   createMintRequestRequest: {
+  //     assets: assetsArray,
+  //   },
+  // });
+
+  // logger.info(`Request sent to minting API for collection address ${destinationChain} for ${tokens.length} tokens.`);
+
+  // return response;
+}
+
+async function runIMXEVMRegularMint(prisma: PrismaClient, wallet: Wallet, destinationChain: number, destinationCollectionAddress: string, EVMMintingRequestDelay: number) {
   logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
   const tokens = await getTokensFromDB(prisma);
-  if(tokens.length > 0) {
-    await mintIMXEVMAssets(
-      prisma,
-      wallet,
-      tokens,
-      destinationChain,
-      destinationCollectionAddress,
-    );
+  if (tokens.length > 0) {
+    await mintIMXEVMAssets(prisma, wallet, tokens, destinationChain, destinationCollectionAddress);
   }
 
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  await runIMXEVMRegularMint(
-    prisma,
-    wallet,
-    destinationChain,
-    destinationCollectionAddress,
-    EVMMintingRequestDelay,
-  );
+  await runIMXEVMRegularMint(prisma, wallet, destinationChain, destinationCollectionAddress, EVMMintingRequestDelay);
 }
 
 async function runEVMRegularMint(
@@ -181,30 +206,10 @@ async function runEVMRegularMint(
 ) {
   logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
   const tokens = await getTokensFromDB(prisma);
-  await mintEVMAssets(
-    prisma,
-    signer,
-    tokens,
-    destinationChain,
-    destinationCollectionAddress,
-    contractABI,
-    transactionConfirmationPollingDelay,
-    EVMMintingGasPrice,
-    gasLimit
-  );
+  await mintEVMAssets(prisma, signer, tokens, destinationChain, destinationCollectionAddress, contractABI, transactionConfirmationPollingDelay, EVMMintingGasPrice, gasLimit);
 
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
-  runEVMRegularMint(
-    prisma,
-    signer,
-    destinationChain,
-    destinationCollectionAddress,
-    contractABI,
-    EVMMintingRequestDelay,
-    transactionConfirmationPollingDelay,
-    EVMMintingGasPrice,
-    gasLimit
-  );
+  runEVMRegularMint(prisma, signer, destinationChain, destinationCollectionAddress, contractABI, EVMMintingRequestDelay, transactionConfirmationPollingDelay, EVMMintingGasPrice, gasLimit);
 }
 
 //Load an array of mints from tokens that haven't been minted, from the DB
@@ -330,13 +335,7 @@ async function batchIMXMintArray(mintArray: MintRequestWithoutAuth[], IMXMinting
   return batchifiedMintArray;
 }
 
-async function mintIMXBatchArray(
-  imxclient: ImmutableX,
-  prisma: PrismaClient,
-  signer: Signer,
-  mintArray: MintRequestWithoutAuth[],
-  IMXMintingBatchDelay: number
-): Promise<MintResult> {
+async function mintIMXBatchArray(imxclient: ImmutableX, prisma: PrismaClient, signer: Signer, mintArray: MintRequestWithoutAuth[], IMXMintingBatchDelay: number): Promise<MintResult> {
   for (const element of mintArray) {
     logger.info("Minting " + element.users[0].tokens.length + " tokens for " + element.users[0].user);
     try {
@@ -367,15 +366,7 @@ async function mintIMXBatchArray(
 }
 
 //Runs the minting function every 10 seconds
-async function runIMXRegularMint(
-  imxclient: ImmutableX,
-  prisma: PrismaClient,
-  signer: Signer,
-  chain: number,
-  collectionAddress: string,
-  IMXMintingBatchSize: number,
-  IMXMintingRequestDelay: number
-) {
+async function runIMXRegularMint(imxclient: ImmutableX, prisma: PrismaClient, signer: Signer, chain: number, collectionAddress: string, IMXMintingBatchSize: number, IMXMintingRequestDelay: number) {
   logger.info(`Checking for new IMX StarkEx mints on chain ${chain} and destinationCollectionAddress ${collectionAddress}...`);
   //loads the mint array which is going to be passed to the minting function
   const mintArray = await loadIMXUserMintArray(imxclient, prisma, collectionAddress);
@@ -422,17 +413,7 @@ async function minter(chain: number, collectionAddress: string) {
     const wallet = new ethers.Wallet(process.env.MINTER_PRIVATE_KEY!);
     const provider = new ethers.providers.JsonRpcProvider(process.env.EVM_PROVIDER_URL!);
     const signer = wallet.connect(provider);
-    runEVMRegularMint(
-      prisma,
-      signer,
-      chain,
-      collectionAddress,
-      contractABI,
-      transactionConfirmationPollingDelay,
-      EVMMintingRequestDelay,
-      EVMMintingGasPrice,
-      EVMMintingGasLimit
-    );
+    runEVMRegularMint(prisma, signer, chain, collectionAddress, contractABI, transactionConfirmationPollingDelay, EVMMintingRequestDelay, EVMMintingGasPrice, EVMMintingGasLimit);
   }
 }
 
@@ -443,6 +424,15 @@ minter(destinationChain, destinationCollectionAddress);
 
 //Polygon mainnet
 //minter(137, originCollectionAddress);
+
+//Test IMX mint via minting API
+async function testMintingViaAPI() {
+  const prisma = new PrismaClient();
+  const tokens = await getTokensFromDB(prisma);
+  const result = await mintIMXEVMAssetsViaMintingAPI(prisma, tokens, 13473, "0xa8d248fa82e097df14b3bcda5515af97d4a62365");
+  console.log(result);
+}
+testMintingViaAPI();
 
 //Test loadIMXUserMintArray
 // async function loadIMXUserMintArrayTest() {

@@ -7,14 +7,7 @@ import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/co
 import { ListTransfersResponse } from "@imtbl/core-sdk";
 import logger from "./logger";
 import { getTransfersFromContract } from "./moralis";
-import {
-  burnAddress,
-  originChain,
-  destinationChain,
-  destinationCollectionAddress,
-  originCollectionAddress,
-  EVMBlockPollingInterval,
-} from "./config";
+import { burnAddress, originChain, destinationChain, destinationCollectionAddress, originCollectionAddress, EVMBlockPollingInterval } from "./config";
 import { tokenIDOffset as configTokenIDOffset } from "./config";
 import { addressMappingEnabled as configAddressMappingEnabled } from "./config";
 dotenv.config();
@@ -57,7 +50,7 @@ async function getEVMBurnTransfersByBlockRange(
   }
 
   try {
-    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock-1, cursor);
+    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock - 1, cursor);
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
@@ -371,7 +364,16 @@ export async function loadBurnTransfers(
           });
 
           if (addressMapping) {
-            logger.info("Found address mapping for " + burn.fromAddress + " on originChain " + burn.chain + " to " + addressMapping.destinationWalletAddress + " on destinationChain " + destinationChain)
+            logger.info(
+              "Found address mapping for " +
+                burn.fromAddress +
+                " on originChain " +
+                burn.chain +
+                " to " +
+                addressMapping.destinationWalletAddress +
+                " on destinationChain " +
+                destinationChain
+            );
             toDestinationWalletAddress = addressMapping.destinationWalletAddress;
           }
         }
@@ -392,11 +394,11 @@ export async function loadBurnTransfers(
           toOriginWalletAddress: burn.toAddress,
           toDestinationWalletAddress: toDestinationWalletAddress,
         };
-        
+
         logger.info(JSON.stringify(tokenData, null, 2));
-        
+
         const token = await prisma.token.create({
-          data: tokenData
+          data: tokenData,
         });
       } catch (error) {
         logger.error("Error loading burn transfer into the database: ", error);
@@ -431,14 +433,25 @@ async function watcher(
     destinationCollectionAddress,
     burnAddress,
     tokenIDOffset,
-    addressMappingEnabled
+    addressMappingEnabled,
   };
 
   if (originChain === 5000 || originChain === 5001) {
     logger.info("IMX watcher configuration:\n" + JSON.stringify(logObject, null, 2));
     const config = originChain === 5000 ? Config.PRODUCTION : Config.SANDBOX;
     const client = new ImmutableX(config);
-    monitorIMXBurnTransfers(client, prisma, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, tokenIDOffset, addressMappingEnabled, undefined, 60000);
+    monitorIMXBurnTransfers(
+      client,
+      prisma,
+      destinationChain,
+      originCollectionAddress,
+      destinationCollectionAddress,
+      burnAddress,
+      tokenIDOffset,
+      addressMappingEnabled,
+      undefined,
+      60000
+    );
   } else {
     logger.info("EVM watcher configuration:\n" + JSON.stringify(logObject, null, 2));
     await Moralis.start({
@@ -446,7 +459,7 @@ async function watcher(
     });
 
     //const currentBlock = await getCurrentBlock(originChain);
-    const currentBlock = 40827812;
+    const currentBlock = 45030160;
 
     monitorEVMBurnTransfers(
       prisma,
@@ -463,7 +476,16 @@ async function watcher(
   }
 }
 
-watcher(originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, EVMBlockPollingInterval, configTokenIDOffset, configAddressMappingEnabled);
+watcher(
+  originChain,
+  destinationChain,
+  originCollectionAddress,
+  destinationCollectionAddress,
+  burnAddress,
+  EVMBlockPollingInterval,
+  configTokenIDOffset,
+  configAddressMappingEnabled
+);
 
 //Polygon mainnet
 //watcher(137, "0x0551b1C0B01928Ab22A565b58427FF0176De883C", "0x0000000000000000000000000000000000000000");

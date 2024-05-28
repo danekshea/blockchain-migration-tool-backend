@@ -9,6 +9,9 @@ import logger from "./logger";
 import * as fs from "fs";
 import { loadBurnTransfers } from "./burnwatcher";
 const csv = require("csv-parser");
+import { v4 as uuidv4 } from "uuid";
+import { readFileSync } from "fs";
+import { join } from "path";
 dotenv.config();
 
 export async function getSigner(network: string, privateKey: string): Promise<Wallet> {
@@ -136,6 +139,32 @@ export function convertIMXTransfersToBurns(transfers: Transfer[], chain: number)
   return transfers.map((transfer) => convertIMXTransferToBurn(transfer, chain));
 }
 
+export function mapTokensToAssets(tokens: Token[]) {
+  const assets = tokens.map((token) => {
+    // Construct the path to the metadata file based on the token's originTokenId
+    const metadataFilePath = join(__dirname, "../metadata", `${token.originTokenId}`);
+
+    // Read and parse the metadata file
+    let metadataContent;
+    try {
+      const fileContent = readFileSync(metadataFilePath, "utf8");
+      metadataContent = JSON.parse(fileContent);
+    } catch (error) {
+      throw new Error(`Failed to read or parse metadata file for token ID ${token.originTokenId}: ${error}`);
+    }
+
+    // Return the asset structure, integrating the dynamically loaded metadata
+    return {
+      owner_address: token.toDestinationWalletAddress,
+      reference_id: uuidv4(),
+      token_id: token.destinationTokenId.toString(),
+      metadata: metadataContent, // Use the loaded metadata
+    };
+  });
+
+  return assets;
+}
+
 export async function getTokensFromDB(prisma: PrismaClient): Promise<Token[]> {
   try {
     const burnTransfers = await prisma.token.findMany({
@@ -240,6 +269,12 @@ export function transformToBurn(data: IMXCSVData[]): burn[] {
   }));
 }
 
+//Generates a UUID for use in the minting API
+export function generateUUID(): string {
+  const uuid = uuidv4();
+  return uuid;
+}
+
 //Key value pairs for the different chains, contains chain details
 export const chains: { [key: number]: chainDetails } = {
   1: { name: "Ethereum", shortName: "eth" },
@@ -258,3 +293,17 @@ export const chains: { [key: number]: chainDetails } = {
   80001: { name: "Mumbai", shortName: "mumbai" },
   11155111: { name: "Sepolia", shortName: "sepolia" },
 };
+
+// // Example usage
+// async function main() {
+//   const prisma = new PrismaClient();
+//   const tokens = await getTokensFromDB(prisma);
+//   console.log(tokens);
+//   const assets = mapTokensToAssets(tokens);
+//   console.log(assets);
+// }
+
+// main().catch((e) => {
+//   console.error(e);
+//   process.exit(1);
+// });

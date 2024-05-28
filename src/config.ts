@@ -12,7 +12,6 @@ export const originCollectionAddress: string = "0x04C707b1E99c301BF86eF9940b3AeF
 //Collection address that migrated tokens are minted to
 export const destinationCollectionAddress: string = "0x5adF615aD4252494cd46D01D295c5ddE7F9Df5f3";
 
-
 //General settings
 
 //Address to look for transfers to which are considered a burn
@@ -25,8 +24,7 @@ export const addressMappingEnabled: boolean = false;
 export const tokenIDOffset: number = 0;
 
 //Enable logging to file
-export const enableFileLogging:boolean = true;
-
+export const enableFileLogging: boolean = true;
 
 //IMX settings
 
@@ -42,7 +40,6 @@ export const IMXMintingBatchDelay: number = 0;
 //Delay in (ms) between each minting request
 export const IMXMintingRequestDelay: number = 5000;
 
-
 //EVM settings
 
 //ABI for the minting contract on the EVM side
@@ -51,16 +48,16 @@ export const contractABI: string = JSON.parse(
 );
 
 //Time to wait between polling for transaction confirmation during mints on EVM chains, in milliseconds
-export const transactionConfirmationPollingDelay:number = 3000;
+export const transactionConfirmationPollingDelay: number = 3000;
 
 //The offset at which blocks are polled for on EVM chains in units of blocks. 5 means poll when the watcher is 5 blocks behind.
-export const EVMBlockPollingInterval:number = 5;
+export const EVMBlockPollingInterval: number = 100000;
 
 //Delays between reading from the DB and attempting to mint on EVM chains, in milliseconds
-export const EVMMintingRequestDelay:number = 1000;
+export const EVMMintingRequestDelay: number = 1000;
 
 //Gas price for mints on EVM chains, in gwei
-export const EVMMintingGasPrice:number = 280;
+export const EVMMintingGasPrice: number = 280;
 
 //Gas limit for mints on EVM chains
-export const EVMMintingGasLimit:number = 146000;
+export const EVMMintingGasLimit: number = 146000;
