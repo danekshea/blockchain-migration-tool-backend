@@ -2,19 +2,12 @@ import Moralis from "moralis";
 import { PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
 import { getCurrentBlock, convertEvmNftTransferToBurnList, convertIMXTransferToBurn, convertIMXTransfersToBurns } from "./utils";
-import { NftTransfer, burn } from "./type";
+import { NftTransfer, burn } from "./types";
 import { ImmutableX, Config, ImmutableXConfiguration, Transfer } from "@imtbl/core-sdk";
 import { ListTransfersResponse } from "@imtbl/core-sdk";
 import logger from "./logger";
 import { getTransfersFromContract } from "./moralis";
-import {
-  burnAddress,
-  originChain,
-  destinationChain,
-  destinationCollectionAddress,
-  originCollectionAddress,
-  EVMBlockPollingInterval,
-} from "./config";
+import { burnAddress, originChain, destinationChain, destinationCollectionAddress, originCollectionAddress, EVMBlockPollingInterval } from "./config";
 import { tokenIDOffset as configTokenIDOffset } from "./config";
 import { addressMappingEnabled as configAddressMappingEnabled } from "./config";
 dotenv.config();
@@ -57,7 +50,7 @@ async function getEVMBurnTransfersByBlockRange(
   }
 
   try {
-    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock-1, cursor);
+    const response = await getTransfersFromContract(collectionAddress, chain, fromBlock, toBlock - 1, cursor);
     //Optional timeout if you get rate limited
     //await new Promise(f => setTimeout(f, 500));
 
@@ -75,17 +68,7 @@ async function getEVMBurnTransfersByBlockRange(
     if (response.cursor != null) {
       logger.info("Cursing through page " + (index + 1) + " of transfers in block range " + fromBlock + "-" + toBlock + "...");
       index++;
-      return await getEVMBurnTransfersByBlockRange(
-        burnTransfers,
-        chain,
-        collectionAddress,
-        burnAddress,
-        fromBlock,
-        toBlock,
-        response.cursor,
-        index,
-        usedtokenids
-      );
+      return await getEVMBurnTransfersByBlockRange(burnTransfers, chain, collectionAddress, burnAddress, fromBlock, toBlock, response.cursor, index, usedtokenids);
     }
 
     logger.info("Found " + burnTransfers.length + " burn transfer(s) in block range");
@@ -94,17 +77,7 @@ async function getEVMBurnTransfersByBlockRange(
     logger.error(err);
     logger.warn("Errored out, retrying in 1 second...");
     await new Promise((f) => setTimeout(f, 1000));
-    return await getEVMBurnTransfersByBlockRange(
-      burnTransfers,
-      chain,
-      collectionAddress,
-      burnAddress,
-      fromBlock,
-      toBlock,
-      cursor,
-      index,
-      usedtokenids
-    );
+    return await getEVMBurnTransfersByBlockRange(burnTransfers, chain, collectionAddress, burnAddress, fromBlock, toBlock, cursor, index, usedtokenids);
   }
 }
 
@@ -138,17 +111,8 @@ async function backFillEVMBurnTransfers(
       if (indexblock + blockinterval > toBlock) {
         blockinterval = toBlock - indexblock;
       }
-      logger.info(
-        "Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for originCollectionAddress " + originCollectionAddress
-      );
-      const burnTransfers = await getEVMBurnTransfersByBlockRange(
-        [],
-        originChain,
-        originCollectionAddress,
-        burnAddress,
-        indexblock,
-        indexblock + blockinterval
-      );
+      logger.info("Getting blocks in block range " + indexblock + "-" + (indexblock + blockinterval) + " for originCollectionAddress " + originCollectionAddress);
+      const burnTransfers = await getEVMBurnTransfersByBlockRange([], originChain, originCollectionAddress, burnAddress, indexblock, indexblock + blockinterval);
       const convertedBurnTransfers = convertEvmNftTransferToBurnList(burnTransfers);
 
       if (burnTransfers.length > 0) {
@@ -181,91 +145,24 @@ async function monitorEVMBurnTransfers(
     const currentblock = await getCurrentBlock(originChain);
 
     if (currentblock - last_polled_block >= block_polling_interval) {
-      logger.info(
-        "Current block " +
-          currentblock +
-          " exceeds the last polled block " +
-          last_polled_block +
-          " by the block polling interval " +
-          block_polling_interval +
-          ", backfilling..."
-      );
-      await backFillEVMBurnTransfers(
-        prisma,
-        originChain,
-        destinationChain,
-        originCollectionAddress,
-        destinationCollectionAddress,
-        burnAddress,
-        last_polled_block,
-        currentblock,
-        block_polling_interval,
-        tokenIDOffset,
-        addressMappingEnabled
-      );
-      monitorEVMBurnTransfers(
-        prisma,
-        originChain,
-        destinationChain,
-        originCollectionAddress,
-        destinationCollectionAddress,
-        burnAddress,
-        currentblock,
-        block_polling_interval,
-        tokenIDOffset,
-        addressMappingEnabled
-      );
+      logger.info("Current block " + currentblock + " exceeds the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval + ", backfilling...");
+      await backFillEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, last_polled_block, currentblock, block_polling_interval, tokenIDOffset, addressMappingEnabled);
+      monitorEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, currentblock, block_polling_interval, tokenIDOffset, addressMappingEnabled);
     } else {
-      logger.info(
-        "Current block " +
-          currentblock +
-          " does not exceed the last polled block " +
-          last_polled_block +
-          " by the block polling interval " +
-          block_polling_interval
-      );
+      logger.info("Current block " + currentblock + " does not exceed the last polled block " + last_polled_block + " by the block polling interval " + block_polling_interval);
       //Delay before checking again
       await new Promise((f) => setTimeout(f, 1000));
-      monitorEVMBurnTransfers(
-        prisma,
-        originChain,
-        destinationChain,
-        originCollectionAddress,
-        destinationCollectionAddress,
-        burnAddress,
-        last_polled_block,
-        block_polling_interval,
-        tokenIDOffset,
-        addressMappingEnabled
-      );
+      monitorEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, last_polled_block, block_polling_interval, tokenIDOffset, addressMappingEnabled);
     }
   } catch (err) {
     logger.error(err);
     console.warn("Errored out, retrying in 1 second...");
     await new Promise((f) => setTimeout(f, 1000));
-    monitorEVMBurnTransfers(
-      prisma,
-      originChain,
-      destinationChain,
-      originCollectionAddress,
-      destinationCollectionAddress,
-      burnAddress,
-      last_polled_block,
-      block_polling_interval,
-      tokenIDOffset,
-      addressMappingEnabled
-    );
+    monitorEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, last_polled_block, block_polling_interval, tokenIDOffset, addressMappingEnabled);
   }
 }
 
-async function getIMXBurnTransfers(
-  client: ImmutableX,
-  originCollectionAddress: string,
-  receiver: string,
-  cursor?: string,
-  maxTimestamp?: Date,
-  minTimestamp?: Date
-): Promise<ListTransfersResponse> {
+async function getIMXBurnTransfers(client: ImmutableX, originCollectionAddress: string, receiver: string, cursor?: string, maxTimestamp?: Date, minTimestamp?: Date): Promise<ListTransfersResponse> {
   console.info("Getting IMX burn transfers, maxTimestamp: " + maxTimestamp?.toISOString() + ", minTimestamp: " + minTimestamp?.toISOString());
   const transfers = await client.listTransfers({
     direction: "asc",
@@ -347,14 +244,7 @@ async function monitorIMXBurnTransfers(
 }
 
 //Loads the burn transfers into the database
-export async function loadBurnTransfers(
-  prisma: PrismaClient,
-  destinationChain: number,
-  destinationCollectionAddress: string,
-  tokenIDOffset: number,
-  addressMappingEnabled: boolean,
-  burnTransfers: burn[]
-): Promise<boolean> {
+export async function loadBurnTransfers(prisma: PrismaClient, destinationChain: number, destinationCollectionAddress: string, tokenIDOffset: number, addressMappingEnabled: boolean, burnTransfers: burn[]): Promise<boolean> {
   try {
     logger.info("Loading " + burnTransfers.length + " burn transfer(s) into the database");
     for (const burn of burnTransfers) {
@@ -371,7 +261,7 @@ export async function loadBurnTransfers(
           });
 
           if (addressMapping) {
-            logger.info("Found address mapping for " + burn.fromAddress + " on originChain " + burn.chain + " to " + addressMapping.destinationWalletAddress + " on destinationChain " + destinationChain)
+            logger.info("Found address mapping for " + burn.fromAddress + " on originChain " + burn.chain + " to " + addressMapping.destinationWalletAddress + " on destinationChain " + destinationChain);
             toDestinationWalletAddress = addressMapping.destinationWalletAddress;
           }
         }
@@ -392,11 +282,11 @@ export async function loadBurnTransfers(
           toOriginWalletAddress: burn.toAddress,
           toDestinationWalletAddress: toDestinationWalletAddress,
         };
-        
+
         logger.info(JSON.stringify(tokenData, null, 2));
-        
+
         const token = await prisma.token.create({
-          data: tokenData
+          data: tokenData,
         });
       } catch (error) {
         logger.error("Error loading burn transfer into the database: ", error);
@@ -411,16 +301,7 @@ export async function loadBurnTransfers(
 }
 
 //Starts a watcher instance
-async function watcher(
-  originChain: number,
-  destinationChain: number,
-  originCollectionAddress: string,
-  destinationCollectionAddress: string,
-  burnAddress: string,
-  pollingInterval: number,
-  tokenIDOffset: number,
-  addressMappingEnabled: boolean
-) {
+async function watcher(originChain: number, destinationChain: number, originCollectionAddress: string, destinationCollectionAddress: string, burnAddress: string, pollingInterval: number, tokenIDOffset: number, addressMappingEnabled: boolean) {
   logger.info("Starting watcher...");
   const prisma = new PrismaClient();
 
@@ -431,7 +312,7 @@ async function watcher(
     destinationCollectionAddress,
     burnAddress,
     tokenIDOffset,
-    addressMappingEnabled
+    addressMappingEnabled,
   };
 
   if (originChain === 5000 || originChain === 5001) {
@@ -448,18 +329,7 @@ async function watcher(
     //const currentBlock = await getCurrentBlock(originChain);
     const currentBlock = 40827812;
 
-    monitorEVMBurnTransfers(
-      prisma,
-      originChain,
-      destinationChain,
-      originCollectionAddress,
-      destinationCollectionAddress,
-      burnAddress,
-      currentBlock,
-      pollingInterval,
-      tokenIDOffset,
-      addressMappingEnabled
-    );
+    monitorEVMBurnTransfers(prisma, originChain, destinationChain, originCollectionAddress, destinationCollectionAddress, burnAddress, currentBlock, pollingInterval, tokenIDOffset, addressMappingEnabled);
   }
 }
 

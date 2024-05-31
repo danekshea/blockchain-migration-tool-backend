@@ -10,17 +10,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@imtbl/contracts": "^2.2.3",
-    "@imtbl/core-sdk": "^1.0.1",
-    "@imtbl/sdk": "^1.23.3",
-    "@moralisweb3/common-evm-utils": "^2.22.0",
-    "@prisma/client": "^4.15.0",
+    "@imtbl/contracts": "^2.2.7",
+    "@imtbl/core-sdk": "^3.6.1",
+    "@imtbl/sdk": "^1.37.1",
+    "@moralisweb3/common-evm-utils": "^2.26.2",
+    "@prisma/client": "^5.14.0",
     "csv-parser": "^3.0.0",
-    "dotenv": "^16.0.3",
-    "ethers": "^5.7.2",
-    "moralis": "^2.22.0",
-    "winston": "^3.9.0",
-    "winston-daily-rotate-file": "^4.7.1"
+    "dotenv": "^16.4.5",
+    "ethers": "^6.12.1",
+    "moralis": "^2.26.2",
+    "winston": "^3.13.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "repository": {
     "type": "git",
@@ -32,8 +32,8 @@
   "homepage": "https://github.com/danekshea/blockchain-migration-tool-backend#readme",
   "description": "",
   "devDependencies": {
-    "@types/node": "^18.11.9",
-    "prisma": "^4.6.1",
-    "ts-node": "^10.9.1"
+    "@types/node": "^20.12.12",
+    "prisma": "^5.14.0",
+    "ts-node": "^10.9.2"
   }
 }

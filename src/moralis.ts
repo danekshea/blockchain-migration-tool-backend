@@ -1,17 +1,10 @@
 import axios from "axios";
 import "dotenv/config";
-import { MoralisGetNFTContractTransfersResponse, NftTransfer, TokenTransferResponse } from "./type";
+import { MoralisGetNFTContractTransfersResponse, NftTransfer, TokenTransferResponse } from "./types";
 import { chains } from "./utils";
 import logger from "./logger";
 
-export async function getTransfersFromContract(
-  collectionAddress:string,
-  chain:number,
-  fromBlock:number,
-  toBlock:number,
-  cursor:string | undefined
-
-): Promise<MoralisGetNFTContractTransfersResponse> {
+export async function getTransfersFromContract(collectionAddress: string, chain: number, fromBlock: number, toBlock: number, cursor: string | undefined): Promise<MoralisGetNFTContractTransfersResponse> {
   const pagePointerQueryString = cursor ? `cursor=${cursor}` : "";
 
   const url = `https://deep-index.moralis.io/api/v2/nft/${collectionAddress}/transfers?chain=${chains[chain].shortName}&to_block=${toBlock}&from_block=${fromBlock}&format=decimal&limit=5&${pagePointerQueryString}`;
@@ -34,7 +27,7 @@ export async function getTransfersFromContract(
       blockTimestamp: new Date(item.block_timestamp),
       transactionHash: item.transaction_hash.toLowerCase(),
     }));
-    
+
     const response: MoralisGetNFTContractTransfersResponse = {
       transfers: transfers,
       cursor: data.cursor,

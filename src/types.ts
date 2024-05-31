@@ -1,5 +1,3 @@
-import { MintTokensResponse, MintUser } from "@imtbl/core-sdk";
-
 export interface burn {
   chain: number;
   blockNumber?: number;
@@ -10,17 +8,6 @@ export interface burn {
   tokenId: number;
   fromAddress: string;
   toAddress: string;
-}
-
-export interface MintRequestWithoutAuth {
-  users: MintUser[];
-  contract_address: string;
-}
-
-interface MintResult {
-  status: "success" | "error";
-  result?: MintTokensResponse;
-  errorMessage?: string;
 }
 
 export interface TokenTransferResponse {
@@ -67,4 +54,33 @@ interface IMXCSVData {
   LastUpdateBlockNumber: string;
   TokenID: string;
   Blueprint: string;
+}
+
+interface EnvironmentConfig {
+  API_URL: string;
+  HUB_API_KEY: string;
+  RPS_API_KEY: string;
+  HOST_IP: string;
+  PORT: number;
+  collectionAddress: string;
+  chainName: string;
+  mintRequestURL: (chainName: string, collectionAddress: string, referenceId: string) => string;
+  enableWebhookVerification: boolean;
+  allowedTopicArn: string;
+  enableFileLogging: boolean;
+  logLevel: string;
+  originChain: number;
+  destinationChain: number;
+  originCollectionAddress: string;
+  destinationCollectionAddress: string;
+  mintingAPIAddress: string;
+  burnAddress: string;
+  EVMBlockPollingInterval: number;
+  EVMMintingRequestDelay: number;
+  addressMappingEnabled: boolean;
+  tokenIDOffset: number;
+}
+
+export interface ServerConfig {
+  [key: string]: EnvironmentConfig; // Dynamic keys based on possible environments
 }

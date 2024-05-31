@@ -4,10 +4,11 @@ import Moralis from "moralis";
 import { Token, PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
 import { EvmNftTransfer, GetTransactionRequest } from "@moralisweb3/common-evm-utils";
-import { IMXCSVData, NftTransfer, burn, chainDetails } from "./type";
+import { IMXCSVData, NftTransfer, burn, chainDetails } from "./types";
 import logger from "./logger";
 import * as fs from "fs";
 import { loadBurnTransfers } from "./burnwatcher";
+import { get } from "http";
 const csv = require("csv-parser");
 dotenv.config();
 
@@ -18,7 +19,7 @@ export async function getSigner(network: string, privateKey: string): Promise<Wa
 
   if (!providerUrl) throw new Error("Provider URL not found.");
 
-  const provider = new ethers.providers.JsonRpcProvider(providerUrl);
+  const provider = new ethers.JsonRpcProvider(providerUrl);
   const signer = new Wallet(privateKey).connect(provider);
   return signer;
 }
@@ -47,32 +48,6 @@ export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string)
   } catch (err) {
     logger.error(err);
     return false;
-  }
-}
-
-async function findDBMinMax(prisma: PrismaClient): Promise<[number, number]> {
-  try {
-    const results = await prisma.token.findMany({
-      where: {
-        originBlockNumber: {
-          not: null,
-        },
-      },
-      orderBy: [
-        {
-          originBlockNumber: "desc",
-        },
-      ],
-    });
-
-    if (results.length === 0) {
-      throw new Error("No records with non-null blockNumbers were found");
-    }
-
-    return [results[0].originBlockNumber as number, results[results.length - 1].originBlockNumber as number];
-  } catch (error: any) {
-    logger.error("Failed to fetch block numbers:", error.message);
-    throw new Error("Failed to fetch block numbers");
   }
 }
 
@@ -259,3 +234,10 @@ export const chains: { [key: number]: chainDetails } = {
   80001: { name: "Mumbai", shortName: "mumbai" },
   11155111: { name: "Sepolia", shortName: "sepolia" },
 };
+
+// (async () => {
+//   await Moralis.start({
+//     apiKey: process.env.MORALIS_API_KEY,
+//   });
+//   console.log(await getCurrentBlock(80002));
+// })();
