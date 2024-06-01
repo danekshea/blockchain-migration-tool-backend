@@ -1,0 +1,21 @@
+services:
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run watcher
+    volumes:
+      - .:/usr/src/app
+      - prisma-db:/usr/src/app/prisma
+
+  minter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: npm run minter
+    volumes:
+      - .:/usr/src/app
+      - prisma-db:/usr/src/app/prisma
+
+volumes:
+  prisma-db:
