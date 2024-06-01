@@ -4,11 +4,13 @@ import Moralis from "moralis";
 import { Token, PrismaClient } from "@prisma/client";
 import * as dotenv from "dotenv";
 import { EvmNftTransfer, GetTransactionRequest } from "@moralisweb3/common-evm-utils";
-import { IMXCSVData, NftTransfer, burn, chainDetails } from "./types";
+import { IMXCSVData, NFTMetadata, NftTransfer, burn, chainDetails } from "./types";
 import logger from "./logger";
 import * as fs from "fs";
 import { loadBurnTransfers } from "./burnwatcher";
 import { get } from "http";
+import serverConfig, { environment } from "./config";
+import { blockchainData, config as sdkConfig } from "@imtbl/sdk";
 const csv = require("csv-parser");
 dotenv.config();
 
@@ -37,17 +39,6 @@ export async function getCurrentBlock(chain: number): Promise<number> {
   } catch (error: any) {
     logger.error("Failed to fetch the current block:", error.message);
     throw new Error("Failed to fetch the current block");
-  }
-}
-
-//Check if the user is registered onchain
-export async function isIMXRegistered(imxclient: ImmutableX, ethaddress: string): Promise<boolean> {
-  try {
-    await imxclient.getUser(ethaddress);
-    return true;
-  } catch (err) {
-    logger.error(err);
-    return false;
   }
 }
 
@@ -92,24 +83,52 @@ export function convertEvmNftTransferToBurnList(evmtList: NftTransfer[]): burn[]
   return evmtList.map(convertEvmNftTransferToBurn);
 }
 
-export function convertIMXTransferToBurn(transfer: Transfer, chain: number): burn {
-  if (transfer.token.data.token_address == null || transfer.token.data.token_id == null) throw new Error("Token address or token id is null");
-  return {
-    chain: chain, // Assuming Ethereum as the chain; update accordingly
-    blockNumber: undefined, // Assuming no blockNumber available; update accordingly
-    timestamp: transfer.timestamp ? new Date(transfer.timestamp) : new Date(),
-    transactionHash: undefined, // Assuming no transactionHash available; update accordingly
-    transaction_id: transfer.transaction_id,
-    tokenAddress: transfer.token.data.token_address,
-    tokenId: parseInt(transfer.token.data.token_id),
-    fromAddress: transfer.user,
-    toAddress: transfer.receiver,
+export const mintByMintingAPI = async (contractAddress: string, walletAddress: string, uuid: string, metadata: NFTMetadata | null): Promise<string> => {
+  const config: blockchainData.BlockchainDataModuleConfiguration = {
+    baseConfig: new sdkConfig.ImmutableConfiguration({
+      environment: environment,
+    }),
+    overrides: {
+      basePath: serverConfig[environment].API_URL,
+      headers: {
+        "x-immutable-api-key": serverConfig[environment].HUB_API_KEY!,
+        "x-api-key": serverConfig[environment].RPS_API_KEY!,
+      },
+    },
   };
-}
 
-export function convertIMXTransfersToBurns(transfers: Transfer[], chain: number): burn[] {
-  return transfers.map((transfer) => convertIMXTransferToBurn(transfer, chain));
-}
+  const client = new blockchainData.BlockchainData(config);
+
+  const asset: any = {
+    owner_address: walletAddress,
+    reference_id: uuid,
+    token_id: null,
+  };
+
+  if (metadata !== null) {
+    asset.metadata = metadata;
+  }
+
+  try {
+    const response = await client.createMintRequest({
+      chainName: serverConfig[environment].chainName,
+      contractAddress,
+      createMintRequestRequest: {
+        assets: [asset],
+      },
+    });
+
+    logger.info(`Mint request sent with UUID: ${uuid}`);
+    logger.debug("Mint request response:", JSON.stringify(response, null, 2));
+    console.log(response);
+
+    return uuid;
+  } catch (error) {
+    logger.error("Error sending mint request:", error);
+    console.log(error);
+    throw error;
+  }
+};
 
 export async function getTokensFromDB(prisma: PrismaClient): Promise<Token[]> {
   try {
@@ -132,19 +151,6 @@ export async function setEVMTokenToMinted(prisma: PrismaClient, destinationToken
     return true;
   } catch (error: any) {
     logger.error("Failed to set token with destinationTokenId: " + destinationTokenId + " to minted:", error.message);
-    return false;
-  }
-}
-
-export async function setStarkTokenToMinted(prisma: PrismaClient, destinationTokenId: number, mintStarkTransaction_id: number): Promise<boolean> {
-  try {
-    await prisma.token.update({
-      where: { destinationTokenId: destinationTokenId },
-      data: { minted: true, mintStarkTransaction_id: mintStarkTransaction_id },
-    });
-    return true;
-  } catch (error: any) {
-    logger.error("Failed to set burn transfer for " + destinationTokenId + " to minted:", error.message);
     return false;
   }
 }
@@ -219,19 +225,19 @@ export function transformToBurn(data: IMXCSVData[]): burn[] {
 export const chains: { [key: number]: chainDetails } = {
   1: { name: "Ethereum", shortName: "eth" },
   5: { name: "Goerli", shortName: "goerli" },
+  10: { name: "Optimism", shortName: "optimism" },
   25: { name: "Cronos", shortName: "cro" },
   56: { name: "BNB Chain", shortName: "bnb" },
   97: { name: "BNB Chain Testnet", shortName: "bsc testnet" },
   137: { name: "Polygon", shortName: "polygon" },
   250: { name: "Fantom", shortName: "fantom" },
-  5000: { name: "ImmutableX", shortName: "imx" },
-  5001: { name: "ImmutableX Testnet", shortName: "imx testnet" },
+  8453: { name: "Base", shortName: "base" },
   13473: { name: "Immutable zkEVM Testnet", shortName: "imtbl-zkevm-testnet" },
   13371: { name: "Immutable zkEVM Mainnet", shortName: "imtbl-zkevm-mainnet" },
   42161: { name: "Arbitrum", shortName: "arbitrum" },
   43114: { name: "Avalanche", shortName: "avalanche" },
   //polygon testnet
-  80001: { name: "Mumbai", shortName: "mumbai" },
+  80002: { name: "Amoy", shortName: "amoy" },
   11155111: { name: "Sepolia", shortName: "sepolia" },
 };
 

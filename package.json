@@ -19,6 +19,7 @@
     "dotenv": "^16.4.5",
     "ethers": "^6.12.1",
     "moralis": "^2.26.2",
+    "uuid": "^9.0.1",
     "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0"
   },
@@ -33,6 +34,7 @@
   "description": "",
   "devDependencies": {
     "@types/node": "^20.12.12",
+    "@types/uuid": "^9.0.8",
     "prisma": "^5.14.0",
     "ts-node": "^10.9.2"
   }
