@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watcher": "ts-node src/burnwatcher.ts",
-    "minter": "ts-node src/burnminter.ts"
+    "watcher": "npx ts-node src/burnwatcher.ts",
+    "minter": "npx ts-node src/burnminter.ts"
   },
   "author": "",
   "license": "ISC",
