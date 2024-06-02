@@ -6,6 +6,7 @@ services:
     command: npm run watcher
     volumes:
       - .:/usr/src/app
+      - /usr/src/app/node_modules
       - prisma-db:/usr/src/app/prisma
 
   minter:
@@ -15,6 +16,7 @@ services:
     command: npm run minter
     volumes:
       - .:/usr/src/app
+      - /usr/src/app/node_modules
       - prisma-db:/usr/src/app/prisma
 
 volumes:
