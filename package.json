@@ -33,7 +33,7 @@
   "homepage": "https://github.com/danekshea/blockchain-migration-tool-backend#readme",
   "description": "",
   "devDependencies": {
-    "@types/node": "^20.12.12",
+    "@types/node": "^20.13.0",
     "@types/uuid": "^9.0.8",
     "prisma": "^5.14.0",
     "ts-node": "^10.9.2"
