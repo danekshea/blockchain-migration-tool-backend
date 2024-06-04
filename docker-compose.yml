@@ -2,7 +2,7 @@ services:
   watcher:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.watcher
     command: npm run watcher
     volumes:
       - .:/usr/src/app
@@ -12,7 +12,7 @@ services:
   minter:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.minter
     command: npm run minter
     volumes:
       - .:/usr/src/app
