@@ -77,9 +77,13 @@ async function mintIMXEVMAssetsViaMintingAPI(prisma: PrismaClient, tokens: Token
 
 async function runIMXEVMRegularMint(prisma: PrismaClient, destinationChain: number, destinationCollectionAddress: string, EVMMintingRequestDelay: number) {
   logger.info(`Checking for new EVM mints on chain ${destinationChain} and collection adddress ${destinationCollectionAddress}...`);
-  const tokens = await getTokensFromDB(prisma);
-  if (tokens.length > 0) {
-    await mintIMXEVMAssetsViaMintingAPI(prisma, tokens, destinationChain, destinationCollectionAddress);
+  try {
+    const tokens = await getTokensFromDB(prisma);
+    if (tokens.length > 0) {
+      await mintIMXEVMAssetsViaMintingAPI(prisma, tokens, destinationChain, destinationCollectionAddress);
+    }
+  } catch (error) {
+    logger.error("Error minting:", error);
   }
 
   await new Promise((r) => setTimeout(r, EVMMintingRequestDelay));
